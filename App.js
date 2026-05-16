@@ -30,18 +30,26 @@ export default function App() {
             backgroundColor: '#fff',
             borderTopColor: '#EEE',
             borderTopWidth: 1,
-            height: 56,
-            paddingBottom: 6,
-            paddingTop: 6,
+            height: 68,
+            paddingBottom: 8,
+            paddingTop: 8,
             elevation: 0,
             shadowOpacity: 0,
           },
           tabBarActiveTintColor: '#000',
           tabBarInactiveTintColor: '#BBB',
-          tabBarLabelStyle: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
-          tabBarIcon: ({ color }) => {
-            const label = route.name === 'Browse' ? '○' : '◆';
-            return <Text style={{ fontSize: 16, color }}>{label}</Text>;
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4 },
+          tabBarIcon: ({ color, focused }) => {
+            const isBrowse = route.name === 'Browse';
+            const glyph = isBrowse ? (focused ? '◉' : '◎') : (focused ? '▣' : '☰');
+            return (
+              <View style={styles.iconWrap}>
+                <View style={[styles.indicator, focused && styles.indicatorActive]} />
+                <View style={[styles.iconPill, focused && styles.iconPillActive]}>
+                  <Text style={{ fontSize: 18, color, fontWeight: '600' }}>{glyph}</Text>
+                </View>
+              </View>
+            );
           },
         })}
       >
@@ -82,5 +90,28 @@ const styles = StyleSheet.create({
     borderWidth: 8,
     borderColor: '#1A1A1A',
     boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+  },
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  indicator: {
+    width: 24,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'transparent',
+    marginBottom: 4,
+  },
+  indicatorActive: {
+    backgroundColor: '#000',
+  },
+  iconPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 3,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
+  },
+  iconPillActive: {
+    backgroundColor: '#F2F2F2',
   },
 });
