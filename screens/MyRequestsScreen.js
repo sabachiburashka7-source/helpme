@@ -6,7 +6,7 @@ import {
 
 const CATEGORIES = ['Moving', 'Assembly', 'Home', 'Other'];
 
-export default function MyRequestsScreen({ myOffers, onAddOffer }) {
+export default function MyRequestsScreen({ myOffers, onAddOffer, onUpdateOffer }) {
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
     description: '', price: '', location: '', category: 'Moving',
@@ -18,11 +18,32 @@ export default function MyRequestsScreen({ myOffers, onAddOffer }) {
     phone: '+1 555-9999',
   };
 
+  async function generateImage(id, description, category) {
+    try {
+      const r = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, category }),
+      });
+      if (!r.ok) {
+        onUpdateOffer?.(id, { generatingImage: false });
+        return;
+      }
+      const data = await r.json();
+      onUpdateOffer?.(id, { image: data.image, generatingImage: false });
+    } catch {
+      onUpdateOffer?.(id, { generatingImage: false });
+    }
+  }
+
   function handleSubmit() {
     if (!form.description.trim()) return Alert.alert('Missing', 'Add a description.');
     if (!form.price.trim()) return Alert.alert('Missing', 'Add a price.');
     if (!form.location.trim()) return Alert.alert('Missing', 'Add a location.');
-    onAddOffer({ ...form, price: Number(form.price) });
+    const id = onAddOffer({ ...form, price: Number(form.price), generatingImage: true });
+    if (id && onUpdateOffer) {
+      generateImage(id, form.description, form.category);
+    }
     setForm({ description: '', price: '', location: '', category: 'Moving' });
     setTab('mine');
   }
@@ -157,6 +178,13 @@ export default function MyRequestsScreen({ myOffers, onAddOffer }) {
 function MyOfferCard({ offer }) {
   return (
     <View style={styles.myCard}>
+      {offer.image ? (
+        <View style={[styles.myCardImage, { backgroundImage: `url("${offer.image}")` }]} />
+      ) : offer.generatingImage ? (
+        <View style={styles.myCardImagePlaceholder}>
+          <Text style={styles.myCardImagePlaceholderText}>Generating image…</Text>
+        </View>
+      ) : null}
       <View style={styles.myCardTop}>
         <Text style={styles.myCardPrice}>${offer.price}</Text>
         <Text style={styles.myCardCat}>{offer.category}</Text>
@@ -266,6 +294,31 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     marginBottom: 10,
+    overflow: 'hidden',
+  },
+  myCardImage: {
+    width: '100%',
+    height: 160,
+    backgroundColor: '#F5F5F5',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    borderRadius: 10,
+    marginBottom: 12,
+    marginHorizontal: -4,
+  },
+  myCardImagePlaceholder: {
+    width: '100%',
+    height: 160,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myCardImagePlaceholderText: {
+    fontSize: 12,
+    color: '#999',
+    letterSpacing: 0.4,
   },
   myCardTop: {
     flexDirection: 'row',

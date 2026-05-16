@@ -15,10 +15,16 @@ export default function App() {
   const isWideScreen = isWeb && width > 480;
 
   function addOffer(offer) {
+    const id = String(nextId++);
     setMyOffers((prev) => [
-      { ...offer, id: String(nextId++), name: 'You', avatar: 'ME', phone: '+1 555-9999' },
+      { ...offer, id, name: 'You', avatar: 'ME', phone: '+1 555-9999' },
       ...prev,
     ]);
+    return id;
+  }
+
+  function updateOffer(id, patch) {
+    setMyOffers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
   }
 
   const AppContent = (
@@ -57,7 +63,13 @@ export default function App() {
           {() => <BrowseScreen myOffers={myOffers} />}
         </Tab.Screen>
         <Tab.Screen name="My Requests">
-          {() => <MyRequestsScreen myOffers={myOffers} onAddOffer={addOffer} />}
+          {() => (
+            <MyRequestsScreen
+              myOffers={myOffers}
+              onAddOffer={addOffer}
+              onUpdateOffer={updateOffer}
+            />
+          )}
         </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>

@@ -105,8 +105,15 @@ const SVG_BY_CATEGORY = {
 };
 
 function imageUrlFor(offer) {
+  if (offer.image) {
+    return `url("${offer.image}")`;
+  }
   const svg = SVG_BY_CATEGORY[offer.category] || SVG_BY_CATEGORY.Other;
   return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
+}
+
+function imageSizeFor(offer) {
+  return offer.image ? 'cover' : 'contain';
 }
 
 export default function BrowseScreen({ myOffers }) {
@@ -164,7 +171,16 @@ function OfferCard({ offer, onPress }) {
       activeOpacity={0.85}
       onPress={onPress}
     >
-      <View style={[styles.cardImage, { backgroundImage: imageUrlFor(offer) }]} />
+      <View
+        style={[
+          styles.cardImage,
+          { backgroundImage: imageUrlFor(offer), backgroundSize: imageSizeFor(offer) },
+        ]}
+      >
+        {offer.generatingImage && !offer.image ? (
+          <Text style={styles.imageLoading}>Generating image…</Text>
+        ) : null}
+      </View>
       <View style={styles.cardBody}>
         <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
         <View style={styles.cardBottomRow}>
@@ -195,7 +211,12 @@ function DetailsModal({ offer, onClose }) {
           activeOpacity={1}
           onPress={() => {}}
         >
-          <View style={[styles.modalImage, { backgroundImage: imageUrlFor(offer) }]} />
+          <View
+            style={[
+              styles.modalImage,
+              { backgroundImage: imageUrlFor(offer), backgroundSize: imageSizeFor(offer) },
+            ]}
+          />
 
           <View style={styles.modalBody}>
             <View style={styles.modalHeaderRow}>
@@ -281,6 +302,17 @@ const styles = StyleSheet.create({
     backgroundSize: 'contain',
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageLoading: {
+    fontSize: 12,
+    color: '#999',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    letterSpacing: 0.4,
   },
   cardBody: { padding: 14 },
   desc: { fontSize: 14, color: '#222', lineHeight: 20, marginBottom: 10 },
