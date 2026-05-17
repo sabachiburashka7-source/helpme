@@ -119,8 +119,10 @@ function imageSizeFor(offer) {
 export default function BrowseScreen({ myOffers }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const allOffers = [...myOffers, ...SAMPLE_OFFERS];
   const filtered = allOffers.filter((o) => {
+    if (!search) return true;
     const q = search.toLowerCase();
     return (
       o.description.toLowerCase().includes(q) ||
@@ -131,21 +133,6 @@ export default function BrowseScreen({ myOffers }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Browse</Text>
-        <Text style={styles.subtitle}>{filtered.length} requests nearby</Text>
-      </View>
-
-      <View style={styles.searchWrap}>
-        <TextInput
-          style={styles.search}
-          placeholder="Search"
-          placeholderTextColor="#AAA"
-          value={search}
-          onChangeText={setSearch}
-        />
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
@@ -158,6 +145,30 @@ export default function BrowseScreen({ myOffers }) {
         ))}
         <View style={{ height: 16 }} />
       </ScrollView>
+
+      {filterOpen && (
+        <View style={styles.searchOverlay}>
+          <TextInput
+            style={styles.search}
+            placeholder="Search requests…"
+            placeholderTextColor="#AAA"
+            value={search}
+            onChangeText={setSearch}
+            autoFocus
+          />
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={[styles.filterBtn, filterOpen && styles.filterBtnActive]}
+        onPress={() => {
+          if (filterOpen) setSearch('');
+          setFilterOpen(!filterOpen);
+        }}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.filterBtnText}>{filterOpen ? '✕' : 'Filter'}</Text>
+      </TouchableOpacity>
 
       <DetailsModal offer={selected} onClose={() => setSelected(null)} />
     </View>
@@ -265,16 +276,36 @@ function DetailsModal({ offer, onClose }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAFAFA' },
-  header: {
-    paddingTop: 56,
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-    backgroundColor: '#FAFAFA',
-  },
-  title: { fontSize: 28, fontWeight: '700', color: '#000', letterSpacing: -0.5 },
-  subtitle: { fontSize: 13, color: '#999', marginTop: 4 },
 
-  searchWrap: { paddingHorizontal: 24, paddingBottom: 12 },
+  list: { paddingTop: 60, paddingHorizontal: 16, paddingBottom: 16 },
+  empty: { textAlign: 'center', color: '#BBB', marginTop: 80, fontSize: 14 },
+
+  filterBtn: {
+    position: 'absolute',
+    top: 52,
+    right: 16,
+    backgroundColor: '#000',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  filterBtnActive: { backgroundColor: '#444' },
+  filterBtnText: { color: '#fff', fontSize: 12, fontWeight: '600', letterSpacing: 0.4 },
+
+  searchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 48,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(250,250,250,0.97)',
+  },
   search: {
     backgroundColor: '#F0F0F0',
     borderRadius: 10,
@@ -283,9 +314,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#000',
   },
-
-  list: { paddingHorizontal: 24, paddingTop: 4 },
-  empty: { textAlign: 'center', color: '#BBB', marginTop: 60, fontSize: 14 },
 
   card: {
     backgroundColor: '#fff',
