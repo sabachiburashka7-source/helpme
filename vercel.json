@@ -1,6 +1,13 @@
 {
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "version": 2,
+  "builds": [
+    { "src": "api/generate-image.js", "use": "@vercel/node" },
+    { "src": "dist/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/generate-image", "dest": "/api/generate-image" },
+    { "src": "/_expo/(.*)", "dest": "/dist/_expo/$1" },
+    { "src": "/favicon.ico", "dest": "/dist/favicon.ico" },
+    { "src": "/(.*)", "dest": "/dist/index.html" }
   ]
 }
