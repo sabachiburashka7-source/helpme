@@ -61,10 +61,47 @@ function imageUrlFor(offer) {
 }
 const imageSizeFor = (offer) => (offer.image ? 'cover' : 'contain');
 
+const HEADER_HEIGHT = 110;
+
 export default function BrowseScreen({ dbOffers }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  const headerOffset = useRef(new Animated.Value(0)).current;
+  const headerVisible = useRef(true);
+  const lastScrollY = useRef(0);
+
+  const showHeader = () => {
+    if (headerVisible.current) return;
+    headerVisible.current = true;
+    Animated.spring(headerOffset, {
+      toValue: 0,
+      useNativeDriver: true,
+      speed: 16,
+      bounciness: 4,
+    }).start();
+  };
+
+  const hideHeader = () => {
+    if (!headerVisible.current) return;
+    headerVisible.current = false;
+    Animated.spring(headerOffset, {
+      toValue: -HEADER_HEIGHT,
+      useNativeDriver: true,
+      speed: 16,
+      bounciness: 0,
+    }).start();
+  };
+
+  const handleScroll = (e) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const dy = y - lastScrollY.current;
+    if (filterOpen || y < 10) showHeader();
+    else if (dy > 6) hideHeader();
+    else if (dy < -6) showHeader();
+    lastScrollY.current = y;
+  };
 
   const allOffers = dbOffers.filter((o) => o.image);
   const filtered = allOffers.filter((o) => {
@@ -77,33 +114,18 @@ export default function BrowseScreen({ dbOffers }) {
     );
   });
 
+  const headerOpacity = headerOffset.interpolate({
+    inputRange: [-HEADER_HEIGHT, -HEADER_HEIGHT / 2, 0],
+    outputRange: [0, 0.4, 1],
+  });
+
   return (
     <View style={styles.container}>
-      <View style={styles.headerBar}>
-        <View>
-          <Text style={styles.headerTitle}>Browse</Text>
-          <Text style={styles.headerSub}>
-            {filtered.length} {filtered.length === 1 ? 'request' : 'requests'} nearby
-          </Text>
-        </View>
-        <FilterButton
-          open={filterOpen}
-          onPress={() => {
-            if (filterOpen) setSearch('');
-            setFilterOpen((v) => !v);
-          }}
-        />
-      </View>
-
-      <SearchBar
-        open={filterOpen}
-        value={search}
-        onChange={setSearch}
-      />
-
       <ScrollView
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingTop: HEADER_HEIGHT + 8 }]}
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
         {filtered.length === 0 && (
           <View style={styles.empty}>
@@ -119,6 +141,35 @@ export default function BrowseScreen({ dbOffers }) {
         ))}
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          styles.headerFloat,
+          {
+            opacity: headerOpacity,
+            transform: [{ translateY: headerOffset }],
+          },
+        ]}
+      >
+        <View style={styles.headerBar}>
+          <View>
+            <Text style={styles.headerTitle}>Browse</Text>
+            <Text style={styles.headerSub}>
+              {filtered.length} {filtered.length === 1 ? 'request' : 'requests'} nearby
+            </Text>
+          </View>
+          <FilterButton
+            open={filterOpen}
+            onPress={() => {
+              if (filterOpen) setSearch('');
+              setFilterOpen((v) => !v);
+            }}
+          />
+        </View>
+
+        <SearchBar open={filterOpen} value={search} onChange={setSearch} />
+      </Animated.View>
 
       <DetailsModal offer={selected} onClose={() => setSelected(null)} />
     </View>
@@ -365,6 +416,14 @@ function DetailsModal({ offer, onClose }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
 
+  headerFloat: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.bg,
+    zIndex: 10,
+  },
   headerBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
