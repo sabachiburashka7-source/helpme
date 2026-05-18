@@ -539,13 +539,13 @@ function DetailsModal({ offer, onClose }) {
           <View style={styles.modalBody}>
             <View style={styles.modalHeaderRow}>
               <View style={styles.avatar}>
-                {isImageUrl(data.avatar) ? (
+                {isImageUrl(data.profile_image) ? (
                   <View
                     style={[
                       styles.avatarImage,
                       Platform.OS === 'web'
                         ? {
-                            backgroundImage: `url("${data.avatar}")`,
+                            backgroundImage: `url("${data.profile_image}")`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
                           }

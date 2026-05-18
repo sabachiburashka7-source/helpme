@@ -88,6 +88,18 @@ module.exports = async function handler(req, res) {
     }
     const row = Array.isArray(updated.data) ? updated.data[0] : updated.data;
     if (!row) return res.status(404).json({ error: 'User not found' });
+
+    // Best-effort: propagate the new image to all of this user's existing offers
+    // so the avatar in Browse reflects the change without requiring a repost.
+    await callSupabase(
+      `/rest/v1/offers?phone=eq.${encodeURIComponent(cleanPhone)}`,
+      {
+        method: 'PATCH',
+        headers: baseHeaders,
+        body: JSON.stringify({ profile_image }),
+      }
+    ).catch(() => {});
+
     return res.json({ id: row.id, phone: row.phone, name: row.name, profile_image: row.profile_image });
   }
 

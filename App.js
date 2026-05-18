@@ -79,8 +79,8 @@ function AppInner() {
     const optimistic = { ...user, profile_image: dataUrl || null };
     persistUser(optimistic);
     setUser(optimistic);
-    setMyOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, avatar: dataUrl || '' } : o)));
-    setDbOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, avatar: dataUrl || '' } : o)));
+    setMyOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, profile_image: dataUrl || null } : o)));
+    setDbOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, profile_image: dataUrl || null } : o)));
     try {
       const r = await fetch('/api/auth', {
         method: 'POST',
@@ -102,7 +102,8 @@ function AppInner() {
     const offerData = {
       ...offer,
       name: user.name,
-      avatar: user.profile_image || '',
+      avatar: (user.name || '?').slice(0, 2).toUpperCase(),
+      profile_image: user.profile_image || null,
       phone: user.phone,
     };
     delete offerData.generatingImage;
