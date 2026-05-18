@@ -261,9 +261,6 @@ function MyOfferCard({ offer }) {
       ) : null}
       <View style={styles.myCardTop}>
         <Text style={styles.myCardPrice}>${offer.price}</Text>
-        <View style={styles.catChip}>
-          <Text style={styles.catChipText}>{offer.category}</Text>
-        </View>
       </View>
       <Text style={styles.myCardDesc}>{offer.description}</Text>
       <View style={styles.myCardFooter}>
@@ -384,21 +381,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   myCardPrice: { fontSize: 20, fontWeight: '800', color: colors.text, letterSpacing: -0.4 },
-  catChip: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentSoftBorder,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  catChipText: {
-    fontSize: 11,
-    color: colors.accent,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
   myCardDesc: { fontSize: 14, color: colors.text, lineHeight: 20, marginBottom: 8 },
   myCardFooter: { flexDirection: 'row', alignItems: 'center' },
   myCardLocIcon: { fontSize: 11, marginRight: 4 },

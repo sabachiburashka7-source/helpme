@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Platform, useWindowDimensions, Animated, Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import BrowseScreen from './screens/BrowseScreen';
@@ -119,31 +119,34 @@ export default function App() {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
             borderTopWidth: 1,
-            height: 72,
+            height: 76,
             paddingBottom: 10,
             paddingTop: 10,
+            paddingHorizontal: 8,
             elevation: 0,
             shadowOpacity: 0,
           },
+          tabBarItemStyle: {
+            paddingHorizontal: 4,
+          },
           tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textTertiary,
-          tabBarLabelStyle: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, marginTop: 2 },
-          tabBarIcon: ({ color, focused }) => {
-            const isBrowse = route.name === 'Browse';
-            return (
-              <View style={styles.iconWrap}>
-                <View
-                  style={[
-                    styles.iconPill,
-                    focused && styles.iconPillActive,
-                    Platform.OS === 'web' && { transition: 'all 200ms cubic-bezier(0.2, 0.8, 0.2, 1)' },
-                  ]}
-                >
-                  {isBrowse ? <BrowseIcon color={color} /> : <RequestsIcon color={color} />}
-                </View>
-              </View>
-            );
-          },
+          tabBarAllowFontScaling: false,
+          tabBarLabel: ({ focused, color }) => (
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.tabLabel,
+                { color },
+                focused && styles.tabLabelActive,
+              ]}
+            >
+              {route.name === 'Browse' ? 'Browse' : 'My requests'}
+            </Text>
+          ),
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabIcon route={route.name} color={color} focused={focused} />
+          ),
         })}
       >
         <Tab.Screen name="Browse">
@@ -176,12 +179,68 @@ export default function App() {
   return Content;
 }
 
+function AnimatedTabIcon({ route, color, focused }) {
+  const anim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const bounce = useRef(new Animated.Value(0)).current;
+  const prevFocused = useRef(focused);
+
+  useEffect(() => {
+    Animated.spring(anim, {
+      toValue: focused ? 1 : 0,
+      useNativeDriver: true,
+      speed: 22,
+      bounciness: 10,
+    }).start();
+
+    if (focused && !prevFocused.current) {
+      bounce.setValue(0);
+      Animated.sequence([
+        Animated.timing(bounce, {
+          toValue: -3,
+          duration: 140,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(bounce, {
+          toValue: 0,
+          useNativeDriver: true,
+          speed: 14,
+          bounciness: 12,
+        }),
+      ]).start();
+    }
+    prevFocused.current = focused;
+  }, [focused, anim, bounce]);
+
+  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  const pillScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
+  const pillOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+
+  return (
+    <View style={styles.iconWrap}>
+      <Animated.View
+        style={[
+          styles.iconPillBg,
+          { opacity: pillOpacity, transform: [{ scale: pillScale }] },
+        ]}
+      />
+      <Animated.View
+        style={{
+          transform: [{ scale }, { translateY: bounce }],
+        }}
+      >
+        {route === 'Browse' ? <BrowseIcon color={color} /> : <RequestsIcon color={color} />}
+      </Animated.View>
+    </View>
+  );
+}
+
 function BrowseIcon({ color }) {
   return (
     <View style={styles.iconBox}>
-      <View style={[styles.iconBar, { backgroundColor: color, width: 14, height: 2 }]} />
-      <View style={[styles.iconBar, { backgroundColor: color, width: 14, height: 2, marginTop: 3 }]} />
-      <View style={[styles.iconBar, { backgroundColor: color, width: 9, height: 2, marginTop: 3 }]} />
+      <View style={[styles.iconBar, { backgroundColor: color, width: 16, height: 2.2 }]} />
+      <View style={[styles.iconBar, { backgroundColor: color, width: 16, height: 2.2, marginTop: 3 }]} />
+      <View style={[styles.iconBar, { backgroundColor: color, width: 10, height: 2.2, marginTop: 3 }]} />
     </View>
   );
 }
@@ -191,11 +250,20 @@ function RequestsIcon({ color }) {
     <View style={styles.iconBox}>
       <View
         style={{
-          width: 14,
-          height: 14,
-          borderRadius: 4,
-          borderWidth: 2,
+          width: 16,
+          height: 16,
+          borderRadius: 5,
+          borderWidth: 2.2,
           borderColor: color,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          width: 5,
+          height: 5,
+          borderRadius: 2.5,
+          backgroundColor: color,
         }}
       />
     </View>
@@ -221,18 +289,16 @@ const styles = StyleSheet.create({
     boxShadow: '0 30px 80px rgba(15, 15, 30, 0.28), 0 8px 20px rgba(15, 15, 30, 0.12)',
   },
   iconWrap: {
+    width: 44,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 5,
+  iconPillBg: {
+    position: 'absolute',
+    width: 44,
+    height: 28,
     borderRadius: radius.pill,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconPillActive: {
     backgroundColor: colors.accentSoft,
   },
   iconBox: {
@@ -241,5 +307,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBar: { borderRadius: 1 },
+  iconBar: { borderRadius: 1.5 },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    marginTop: 3,
+    textAlign: 'center',
+  },
+  tabLabelActive: {
+    fontWeight: '700',
+  },
 });

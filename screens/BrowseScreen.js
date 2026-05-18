@@ -125,34 +125,95 @@ export default function BrowseScreen({ dbOffers }) {
   );
 }
 
+function SearchGlyph({ color }) {
+  return (
+    <View style={glyphStyles.searchWrap}>
+      <View style={[glyphStyles.searchCircle, { borderColor: color }]} />
+      <View style={[glyphStyles.searchHandle, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+function CloseGlyph({ color }) {
+  return (
+    <View style={glyphStyles.closeWrap}>
+      <View style={[glyphStyles.closeBar, { backgroundColor: color, transform: [{ rotate: '45deg' }] }]} />
+      <View style={[glyphStyles.closeBar, { backgroundColor: color, transform: [{ rotate: '-45deg' }] }]} />
+    </View>
+  );
+}
+
 function FilterButton({ open, onPress }) {
-  const rot = useRef(new Animated.Value(0)).current;
+  const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.spring(rot, {
+    Animated.spring(anim, {
       toValue: open ? 1 : 0,
       useNativeDriver: true,
       speed: 18,
-      bounciness: 8,
+      bounciness: 7,
     }).start();
-  }, [open, rot]);
+  }, [open, anim]);
 
-  const rotate = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
+  const searchOpacity = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0, 0] });
+  const searchScale = anim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.6] });
+  const closeOpacity = anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
+  const closeScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
 
   return (
     <PressableScale onPress={onPress} hoverLift>
-      <Animated.View
-        style={[
-          styles.filterBtn,
-          open && styles.filterBtnActive,
-        ]}
-      >
-        <Animated.Text style={[styles.filterBtnText, open && styles.filterBtnTextActive, { transform: [{ rotate }] }]}>
-          +
-        </Animated.Text>
-      </Animated.View>
+      <View style={[styles.filterBtn, open && styles.filterBtnActive]}>
+        <Animated.View style={[glyphStyles.layer, { opacity: searchOpacity, transform: [{ scale: searchScale }] }]}>
+          <SearchGlyph color="#fff" />
+        </Animated.View>
+        <Animated.View style={[glyphStyles.layer, { opacity: closeOpacity, transform: [{ scale: closeScale }] }]}>
+          <CloseGlyph color="#fff" />
+        </Animated.View>
+      </View>
     </PressableScale>
   );
 }
+
+const glyphStyles = StyleSheet.create({
+  layer: {
+    position: 'absolute',
+    left: 0, right: 0, top: 0, bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchWrap: {
+    width: 18,
+    height: 18,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  searchCircle: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+  },
+  searchHandle: {
+    position: 'absolute',
+    width: 2,
+    height: 7,
+    borderRadius: 1,
+    bottom: 0,
+    right: 1,
+    transform: [{ rotate: '-45deg' }],
+  },
+  closeWrap: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBar: {
+    position: 'absolute',
+    width: 16,
+    height: 2,
+    borderRadius: 1,
+  },
+});
 
 function SearchBar({ open, value, onChange }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -214,10 +275,8 @@ function OfferCard({ offer, onPress }) {
         <View style={styles.cardBody}>
           <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
           <View style={styles.cardBottomRow}>
-            <View style={styles.catChip}>
-              <Text style={styles.catChipText}>{offer.category}</Text>
-            </View>
             <Text style={styles.cardName}>{offer.name}</Text>
+            <Text style={styles.cardLoc} numberOfLines={1}>{offer.location}</Text>
           </View>
         </View>
       </View>
@@ -274,9 +333,7 @@ function DetailsModal({ offer, onClose }) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalName}>{data.name}</Text>
-                <View style={styles.catChipInline}>
-                  <Text style={styles.catChipText}>{data.category}</Text>
-                </View>
+                <Text style={styles.modalSub}>{data.location}</Text>
               </View>
               <Text style={styles.modalPrice}>${data.price}</Text>
             </View>
@@ -284,10 +341,6 @@ function DetailsModal({ offer, onClose }) {
             <Text style={styles.modalDesc}>{data.description}</Text>
 
             <View style={styles.detailGroup}>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Location</Text>
-                <Text style={styles.detailValue}>{data.location}</Text>
-              </View>
               <View style={[styles.detailRow, styles.detailRowLast]}>
                 <Text style={styles.detailLabel}>Number</Text>
                 <Text style={styles.detailValue}>{data.phone}</Text>
@@ -424,32 +477,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  catChip: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentSoftBorder,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
+  cardName: { fontSize: 13, color: colors.text, fontWeight: '600' },
+  cardLoc: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginLeft: 10,
+    flexShrink: 1,
   },
-  catChipInline: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentSoftBorder,
-    borderWidth: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-  },
-  catChipText: {
-    fontSize: 11,
-    color: colors.accent,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  cardName: { fontSize: 12, color: colors.textTertiary, fontWeight: '500' },
 
   avatar: {
     width: 40,
@@ -494,6 +528,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   modalName: { fontSize: 17, fontWeight: '700', color: colors.text },
+  modalSub: { fontSize: 12, color: colors.textTertiary, marginTop: 3 },
   modalPrice: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
   modalDesc: { fontSize: 14, color: colors.text, lineHeight: 21, marginBottom: 8 },
 
