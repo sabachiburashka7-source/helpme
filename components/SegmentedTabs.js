@@ -2,36 +2,38 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, Platform } from 'react-native';
 import { colors, transitions } from './theme';
 
-export default function SegmentedTabs({ tabs, value, onChange }) {
+export default function SegmentedTabs({ tabs, value, onChange, hideIndicator = false }) {
   const [width, setWidth] = useState(0);
   const tx = useRef(new Animated.Value(0)).current;
   const index = Math.max(0, tabs.findIndex((t) => t.value === value));
 
   useEffect(() => {
-    if (width === 0) return;
+    if (width === 0 || hideIndicator) return;
     Animated.spring(tx, {
       toValue: (width / tabs.length) * index,
       useNativeDriver: true,
       speed: 24,
       bounciness: 6,
     }).start();
-  }, [index, width, tabs.length, tx]);
+  }, [index, width, tabs.length, tx, hideIndicator]);
 
   return (
     <View style={styles.wrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <View style={styles.track}>
-        {width > 0 ? (
-          <Animated.View
-            style={[
-              styles.thumb,
-              {
-                width: width / tabs.length,
-                transform: [{ translateX: tx }],
-              },
-            ]}
-          />
-        ) : null}
-      </View>
+      {hideIndicator ? null : (
+        <View style={styles.track}>
+          {width > 0 ? (
+            <Animated.View
+              style={[
+                styles.thumb,
+                {
+                  width: width / tabs.length,
+                  transform: [{ translateX: tx }],
+                },
+              ]}
+            />
+          ) : null}
+        </View>
+      )}
       <View style={styles.row}>
         {tabs.map((t) => {
           const active = t.value === value;

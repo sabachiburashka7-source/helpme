@@ -1,14 +1,12 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TextInput, Pressable, Animated,
+  View, Text, ScrollView, TextInput,
   StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { colors, radius, shadows, transitions, typography } from '../components/theme';
 import { Button } from '../components/Button';
 import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
-
-const CATEGORIES = ['Moving', 'Assembly', 'Home', 'Other'];
 
 function Field({ label, multiline, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
@@ -38,47 +36,10 @@ function Field({ label, multiline, ...inputProps }) {
   );
 }
 
-function CategoryPill({ label, active, onPress }) {
-  const bg = useRef(new Animated.Value(active ? 1 : 0)).current;
-  React.useEffect(() => {
-    Animated.spring(bg, {
-      toValue: active ? 1 : 0,
-      useNativeDriver: false,
-      speed: 18,
-      bounciness: 6,
-    }).start();
-  }, [active, bg]);
-
-  const backgroundColor = bg.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.surface, colors.accent],
-  });
-  const borderColor = bg.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.border, colors.accent],
-  });
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ hovered }) => [
-        Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
-        hovered && !active && { transform: [{ translateY: -1 }] },
-      ]}
-    >
-      <Animated.View
-        style={[styles.catBtn, { backgroundColor, borderColor }]}
-      >
-        <Text style={[styles.catText, active && styles.catTextActive]}>{label}</Text>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
 export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateOffer, onLogout }) {
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
-    description: '', price: '', location: '', category: 'Moving',
+    description: '', price: '', location: '',
   });
 
   const profile = {
@@ -109,12 +70,16 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
     if (!form.description.trim()) return Alert.alert('Missing', 'Add a description.');
     if (!form.price.trim()) return Alert.alert('Missing', 'Add a price.');
     if (!form.location.trim()) return Alert.alert('Missing', 'Add a location.');
-    const { description, category } = form;
-    setForm({ description: '', price: '', location: '', category: 'Moving' });
+    const { description } = form;
+    setForm({ description: '', price: '', location: '' });
     setTab('mine');
-    const id = await onAddOffer({ ...form, price: Number(form.price) });
+    const id = await onAddOffer({
+      ...form,
+      price: Number(form.price),
+      category: 'Other',
+    });
     if (id && onUpdateOffer) {
-      generateImage(id, description, category);
+      generateImage(id, description, 'Other');
     }
   }
 
@@ -160,6 +125,7 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
             ]}
             value={tab}
             onChange={setTab}
+            hideIndicator
           />
         </View>
 
@@ -198,24 +164,8 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
               />
             </FadeInUp>
 
-            <FadeInUp delay={150}>
-              <View style={fieldStyles.wrap}>
-                <Text style={fieldStyles.label}>Category</Text>
-                <View style={styles.cats}>
-                  {CATEGORIES.map((cat) => (
-                    <CategoryPill
-                      key={cat}
-                      label={cat}
-                      active={form.category === cat}
-                      onPress={() => setForm((f) => ({ ...f, category: cat }))}
-                    />
-                  ))}
-                </View>
-              </View>
-            </FadeInUp>
-
             <View style={{ height: 24 }} />
-            <FadeInUp delay={200}>
+            <FadeInUp delay={150}>
               <Button title="Post request" size="lg" onPress={handleSubmit} />
             </FadeInUp>
             <View style={{ height: 32 }} />
@@ -309,16 +259,6 @@ const styles = StyleSheet.create({
   tabsWrap: { paddingHorizontal: 20 },
 
   form: { paddingHorizontal: 20, paddingTop: 16 },
-
-  cats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  catBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-  },
-  catText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
-  catTextActive: { color: '#fff', fontWeight: '600' },
 
   myList: { paddingHorizontal: 20, paddingTop: 16 },
   empty: { alignItems: 'center', paddingTop: 60 },
