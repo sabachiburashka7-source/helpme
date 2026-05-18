@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
+import { pickProfileImage, isImageUrl } from '../components/profileImage';
 
 function Field({ label, focused, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
@@ -41,8 +42,18 @@ export default function AuthScreen({ onAuthenticated }) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [profileImage, setProfileImage] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  async function chooseProfileImage() {
+    try {
+      const dataUrl = await pickProfileImage();
+      if (dataUrl) setProfileImage(dataUrl);
+    } catch (err) {
+      flashError(err?.message || t('Could not upload image'));
+    }
+  }
 
   const isRegister = mode === 'register';
 
@@ -75,6 +86,7 @@ export default function AuthScreen({ onAuthenticated }) {
           phone: phone.trim(),
           password,
           name: name.trim(),
+          profile_image: isRegister ? profileImage : undefined,
         }),
       });
       const data = await r.json();
@@ -136,13 +148,45 @@ export default function AuthScreen({ onAuthenticated }) {
         <FadeInUp delay={140}>
           <View style={styles.form}>
             {isRegister && (
-              <Field
-                label={t('Name')}
-                placeholder={t('Your name')}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-              />
+              <>
+                <View style={styles.avatarRow}>
+                  <Pressable
+                    onPress={chooseProfileImage}
+                    style={({ hovered }) => [
+                      styles.avatarPick,
+                      Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                      hovered && { opacity: 0.92 },
+                    ]}
+                  >
+                    {isImageUrl(profileImage) ? (
+                      <View
+                        style={[
+                          styles.avatarImage,
+                          Platform.OS === 'web'
+                            ? {
+                                backgroundImage: `url("${profileImage}")`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                              }
+                            : null,
+                        ]}
+                      />
+                    ) : (
+                      <Text style={styles.avatarPickPlus}>+</Text>
+                    )}
+                  </Pressable>
+                  <Text style={styles.avatarHint}>
+                    {profileImage ? t('Tap to change photo') : t('Add profile photo (optional)')}
+                  </Text>
+                </View>
+                <Field
+                  label={t('Name')}
+                  placeholder={t('Your name')}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                />
+              </>
             )}
 
             <Field
@@ -256,6 +300,41 @@ const styles = StyleSheet.create({
   switchRow: { alignItems: 'center', marginTop: 20, paddingVertical: 6 },
   switchText: { fontSize: 13, color: colors.textSecondary },
   switchTextStrong: { color: colors.accent, fontWeight: '600' },
+
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  avatarPick: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.accentSoftBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    overflow: 'hidden',
+  },
+  avatarPickPlus: {
+    color: colors.accent,
+    fontWeight: '300',
+    fontSize: 36,
+    lineHeight: 38,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
+  },
+  avatarHint: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    flexShrink: 1,
+  },
 });
 
 const fieldStyles = StyleSheet.create({

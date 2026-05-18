@@ -44,6 +44,10 @@ const dict = {
     'Already have an account? ': 'Уже есть аккаунт? ',
     'New here? ': 'Впервые здесь? ',
     'Create one': 'Создать',
+    'Add profile photo (optional)': 'Добавить фото профиля (необязательно)',
+    'Tap to change photo': 'Нажмите, чтобы изменить фото',
+    'Upload failed': 'Ошибка загрузки',
+    'Could not upload image': 'Не удалось загрузить изображение',
 
     // Browse
     'Browse': 'Поиск',
@@ -122,6 +126,10 @@ const dict = {
     'Already have an account? ': 'უკვე გაქვთ ანგარიში? ',
     'New here? ': 'ახალი ხართ აქ? ',
     'Create one': 'შექმენით',
+    'Add profile photo (optional)': 'პროფილის ფოტოს დამატება (არასავალდებულო)',
+    'Tap to change photo': 'დააჭირეთ ფოტოს შესაცვლელად',
+    'Upload failed': 'ატვირთვა ვერ მოხერხდა',
+    'Could not upload image': 'სურათის ატვირთვა ვერ მოხერხდა',
 
     // Browse
     'Browse': 'ძიება',

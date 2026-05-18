@@ -74,11 +74,35 @@ function AppInner() {
     setDbOffers([]);
   }
 
+  async function updateProfileImage(dataUrl) {
+    const previous = user;
+    const optimistic = { ...user, profile_image: dataUrl || null };
+    persistUser(optimistic);
+    setUser(optimistic);
+    setMyOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, avatar: dataUrl || '' } : o)));
+    setDbOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, avatar: dataUrl || '' } : o)));
+    try {
+      const r = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_profile_image',
+          phone: user.phone,
+          profile_image: dataUrl || null,
+        }),
+      });
+      if (!r.ok) throw new Error('save failed');
+    } catch {
+      persistUser(previous);
+      setUser(previous);
+    }
+  }
+
   async function addOffer(offer) {
     const offerData = {
       ...offer,
       name: user.name,
-      avatar: (user.name || '?').slice(0, 2).toUpperCase(),
+      avatar: user.profile_image || '',
       phone: user.phone,
     };
     delete offerData.generatingImage;
@@ -187,6 +211,7 @@ function AppInner() {
               onUpdateOffer={updateOffer}
               onRemoveOffer={removeOffer}
               onLogout={handleLogout}
+              onUpdateProfileImage={updateProfileImage}
             />
           )}
         </Tab.Screen>

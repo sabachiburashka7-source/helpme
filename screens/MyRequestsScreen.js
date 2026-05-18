@@ -8,6 +8,7 @@ import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
 import MapPicker from '../components/MapPicker';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
+import { pickProfileImage, isImageUrl } from '../components/profileImage';
 
 const KEYFRAMES_ID = 'live-gradient-keyframes';
 function ensureKeyframes() {
@@ -201,7 +202,7 @@ function LoadingState() {
   );
 }
 
-export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout }) {
+export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onUpdateProfileImage }) {
   useEffect(() => { ensureKeyframes(); }, []);
   const { t } = useTranslation();
 
@@ -257,9 +258,20 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
   const profile = {
     name: user?.name || 'You',
-    avatar: (user?.name || 'ME').slice(0, 2).toUpperCase(),
+    profileImage: user?.profile_image || null,
     phone: user?.phone || '',
   };
+
+  async function handlePickProfileImage() {
+    if (!onUpdateProfileImage) return;
+    try {
+      const dataUrl = await pickProfileImage();
+      if (!dataUrl) return;
+      await onUpdateProfileImage(dataUrl);
+    } catch (err) {
+      Alert.alert(t('Upload failed'), err?.message || t('Could not upload image'));
+    }
+  }
 
   async function generateImage(id, description, category) {
     try {
@@ -317,9 +329,32 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 <OutlinePill title={t('Sign out')} onPress={onLogout} />
               </View>
             ) : null}
-            <View style={[styles.avatar, liveDark]}>
-              <Text style={styles.avatarText}>{profile.avatar}</Text>
-            </View>
+            <Pressable
+              onPress={handlePickProfileImage}
+              style={({ hovered }) => [
+                styles.avatar,
+                !isImageUrl(profile.profileImage) && liveDark,
+                Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                hovered && { opacity: 0.92 },
+              ]}
+            >
+              {isImageUrl(profile.profileImage) ? (
+                <View
+                  style={[
+                    styles.avatarImage,
+                    Platform.OS === 'web'
+                      ? {
+                          backgroundImage: `url("${profile.profileImage}")`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }
+                      : null,
+                  ]}
+                />
+              ) : (
+                <Text style={styles.avatarPlus}>+</Text>
+              )}
+            </Pressable>
             <Text style={styles.profileName} numberOfLines={1}>{profile.name}</Text>
             {profile.phone ? (
               <Text style={styles.profileSub} numberOfLines={1}>{profile.phone}</Text>
@@ -569,6 +604,13 @@ const styles = StyleSheet.create({
     boxShadow: '0 8px 24px rgba(122, 18, 48, 0.28)',
   },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 20, letterSpacing: 0.5 },
+  avatarPlus: { color: '#fff', fontWeight: '300', fontSize: 36, lineHeight: 38 },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
+    backgroundColor: colors.surfaceAlt,
+  },
   profileName: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: 'center' },
   profileSub: { fontSize: 12, color: colors.textTertiary, marginTop: 2, textAlign: 'center' },
 

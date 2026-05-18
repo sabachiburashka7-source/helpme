@@ -7,6 +7,7 @@ import { colors, radius, shadows, transitions, typography } from '../components/
 import { Button, PressableScale } from '../components/Button';
 import FadeInUp from '../components/FadeInUp';
 import { useTranslation } from '../components/i18n';
+import { isImageUrl } from '../components/profileImage';
 
 const SVG_BY_CATEGORY = {
   Moving: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
@@ -538,7 +539,22 @@ function DetailsModal({ offer, onClose }) {
           <View style={styles.modalBody}>
             <View style={styles.modalHeaderRow}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{data.avatar}</Text>
+                {isImageUrl(data.avatar) ? (
+                  <View
+                    style={[
+                      styles.avatarImage,
+                      Platform.OS === 'web'
+                        ? {
+                            backgroundImage: `url("${data.avatar}")`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                          }
+                        : null,
+                    ]}
+                  />
+                ) : (
+                  <Text style={styles.avatarPlus}>+</Text>
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalName}>{data.name}</Text>
@@ -767,6 +783,13 @@ const styles = StyleSheet.create({
     borderColor: colors.accentSoftBorder,
   },
   avatarText: { color: colors.accent, fontWeight: '700', fontSize: 12 },
+  avatarPlus: { color: colors.accent, fontWeight: '300', fontSize: 24, lineHeight: 26 },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    backgroundColor: colors.surfaceAlt,
+  },
 
   modalBackdrop: {
     flex: 1,

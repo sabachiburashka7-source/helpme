@@ -61,12 +61,36 @@ module.exports = async function handler(req, res) {
     'Content-Type': 'application/json',
   };
 
-  const { action, phone, password, name } = req.body || {};
+  const { action, phone, password, name, profile_image } = req.body || {};
   const cleanPhone = normalizePhone(phone);
 
   if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
     return res.status(400).json({ error: 'Enter a valid phone number' });
   }
+
+  if (action === 'update_profile_image') {
+    if (typeof profile_image !== 'string' && profile_image !== null) {
+      return res.status(400).json({ error: 'Invalid profile image' });
+    }
+    const updated = await callSupabase(
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}`,
+      {
+        method: 'PATCH',
+        headers: { ...baseHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify({ profile_image }),
+      }
+    );
+    if (!updated.ok) {
+      return res.status(updated.status).json({
+        error: supabaseError(updated.data, 'Could not update profile image'),
+        supabase: updated.data,
+      });
+    }
+    const row = Array.isArray(updated.data) ? updated.data[0] : updated.data;
+    if (!row) return res.status(404).json({ error: 'User not found' });
+    return res.json({ id: row.id, phone: row.phone, name: row.name, profile_image: row.profile_image });
+  }
+
   if (typeof password !== 'string' || password.length < 4) {
     return res.status(400).json({ error: 'Password must be at least 4 characters' });
   }
@@ -90,10 +114,14 @@ module.exports = async function handler(req, res) {
     }
 
     const password_hash = hashPassword(password);
+    const insertPayload = { phone: cleanPhone, password_hash, name: cleanName };
+    if (typeof profile_image === 'string' && profile_image) {
+      insertPayload.profile_image = profile_image;
+    }
     const created = await callSupabase('/rest/v1/users', {
       method: 'POST',
       headers: { ...baseHeaders, Prefer: 'return=representation' },
-      body: JSON.stringify({ phone: cleanPhone, password_hash, name: cleanName }),
+      body: JSON.stringify(insertPayload),
     });
     if (!created.ok) {
       return res.status(created.status).json({
@@ -102,12 +130,17 @@ module.exports = async function handler(req, res) {
       });
     }
     const row = Array.isArray(created.data) ? created.data[0] : created.data;
-    return res.status(201).json({ id: row.id, phone: row.phone, name: row.name });
+    return res.status(201).json({
+      id: row.id,
+      phone: row.phone,
+      name: row.name,
+      profile_image: row.profile_image || null,
+    });
   }
 
   if (action === 'login') {
     const found = await callSupabase(
-      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id,phone,name,password_hash`,
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id,phone,name,password_hash,profile_image`,
       { headers: baseHeaders }
     );
     if (!found.ok) {
@@ -120,7 +153,12 @@ module.exports = async function handler(req, res) {
     if (!row || !verifyPassword(password, row.password_hash)) {
       return res.status(401).json({ error: 'Wrong phone or password' });
     }
-    return res.json({ id: row.id, phone: row.phone, name: row.name });
+    return res.json({
+      id: row.id,
+      phone: row.phone,
+      name: row.name,
+      profile_image: row.profile_image || null,
+    });
   }
 
   return res.status(400).json({ error: 'Unknown action' });
