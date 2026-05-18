@@ -45,24 +45,33 @@ function loadMapLibre() {
 }
 
 function buildMarkerElement(accent) {
+  // Outer element: MapLibre owns its `transform` (used for positioning).
+  // Do NOT modify outer's transform — that's what caused the pin to jump.
   const el = document.createElement('div');
-  el.style.cssText = [
-    'width: 26px',
-    'height: 26px',
+  el.style.cssText = 'width: 26px; height: 26px; cursor: grab;';
+
+  // Inner element: visual look + press-scale feedback.
+  const inner = document.createElement('div');
+  inner.style.cssText = [
+    'width: 100%',
+    'height: 100%',
     'border-radius: 50%',
     `background: ${accent}`,
     'border: 3px solid #fff',
     'box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(79, 70, 229, 0.15)',
-    'cursor: grab',
+    'box-sizing: border-box',
     'transition: transform 120ms ease',
+    'pointer-events: none',
   ].join(';');
+  el.appendChild(inner);
+
   el.addEventListener('mousedown', () => {
     el.style.cursor = 'grabbing';
-    el.style.transform = 'scale(1.12)';
+    inner.style.transform = 'scale(1.12)';
   });
   const release = () => {
     el.style.cursor = 'grab';
-    el.style.transform = '';
+    inner.style.transform = '';
   };
   el.addEventListener('mouseup', release);
   el.addEventListener('mouseleave', release);
@@ -99,7 +108,7 @@ export default function MapPicker({
           style: STYLE_URL,
           center: [longitude, latitude],
           zoom: 14,
-          attributionControl: { compact: true },
+          attributionControl: false,
         });
         map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
