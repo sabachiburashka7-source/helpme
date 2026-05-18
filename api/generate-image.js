@@ -34,14 +34,13 @@ module.exports = async function handler(req, res) {
         n: 1,
         size: '1024x1024',
         quality: 'low',
-        response_format: 'b64_json',
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
       console.error('OpenAI error', response.status, errText);
-      return res.status(response.status).json({ error: 'Image generation failed' });
+      return res.status(response.status).json({ error: 'Image generation failed', detail: errText });
     }
 
     const data = await response.json();
