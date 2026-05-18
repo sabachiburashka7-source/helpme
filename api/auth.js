@@ -40,11 +40,19 @@ module.exports = async function handler(req, res) {
   const url = rawUrl.replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
 
   async function callSupabase(path, init) {
-    const r = await fetch(`${url}${path}`, init);
+    const fullUrl = `${url}${path}`;
+    console.log('[auth] ->', init?.method || 'GET', fullUrl);
+    const r = await fetch(fullUrl, init);
     const text = await r.text();
+    console.log('[auth] <-', r.status, text.slice(0, 400));
     let data;
-    try { data = JSON.parse(text); } catch { data = { error: text }; }
+    try { data = JSON.parse(text); } catch { data = { message: text }; }
     return { ok: r.ok, status: r.status, data };
+  }
+
+  function supabaseError(data, fallback) {
+    if (!data) return fallback;
+    return data.message || data.error || data.hint || data.details || fallback;
   }
 
   const baseHeaders = {
@@ -71,7 +79,13 @@ module.exports = async function handler(req, res) {
       `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id`,
       { headers: baseHeaders }
     );
-    if (existing.ok && Array.isArray(existing.data) && existing.data.length > 0) {
+    if (!existing.ok) {
+      return res.status(existing.status).json({
+        error: supabaseError(existing.data, 'Could not reach users table'),
+        supabase: existing.data,
+      });
+    }
+    if (Array.isArray(existing.data) && existing.data.length > 0) {
       return res.status(409).json({ error: 'An account with this phone already exists' });
     }
 
@@ -81,7 +95,12 @@ module.exports = async function handler(req, res) {
       headers: { ...baseHeaders, Prefer: 'return=representation' },
       body: JSON.stringify({ phone: cleanPhone, password_hash, name: cleanName }),
     });
-    if (!created.ok) return res.status(created.status).json(created.data);
+    if (!created.ok) {
+      return res.status(created.status).json({
+        error: supabaseError(created.data, 'Could not create account'),
+        supabase: created.data,
+      });
+    }
     const row = Array.isArray(created.data) ? created.data[0] : created.data;
     return res.status(201).json({ id: row.id, phone: row.phone, name: row.name });
   }
@@ -91,7 +110,12 @@ module.exports = async function handler(req, res) {
       `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id,phone,name,password_hash`,
       { headers: baseHeaders }
     );
-    if (!found.ok) return res.status(found.status).json(found.data);
+    if (!found.ok) {
+      return res.status(found.status).json({
+        error: supabaseError(found.data, 'Could not reach users table'),
+        supabase: found.data,
+      });
+    }
     const row = Array.isArray(found.data) ? found.data[0] : null;
     if (!row || !verifyPassword(password, row.password_hash)) {
       return res.status(401).json({ error: 'Wrong phone or password' });
