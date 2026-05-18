@@ -8,7 +8,9 @@ import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
 import MapPicker from '../components/MapPicker';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
-import { pickProfileImage, isImageUrl } from '../components/profileImage';
+import { pickProfileImage, pickOfferImages, isImageUrl } from '../components/profileImage';
+
+const MAX_OFFER_IMAGES = 6;
 
 const KEYFRAMES_ID = 'live-gradient-keyframes';
 function ensureKeyframes() {
@@ -208,17 +210,34 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
-    description: '', price: '', location: '', latitude: null, longitude: null,
+    description: '', price: '', location: '', latitude: null, longitude: null, images: [],
   });
   const [locationMode, setLocationMode] = useState('manual');
   const [gpsStatus, setGpsStatus] = useState('idle');
   const [gpsError, setGpsError] = useState('');
 
   function resetForm() {
-    setForm({ description: '', price: '', location: '', latitude: null, longitude: null });
+    setForm({ description: '', price: '', location: '', latitude: null, longitude: null, images: [] });
     setLocationMode('manual');
     setGpsStatus('idle');
     setGpsError('');
+  }
+
+  async function handlePickOfferImages() {
+    try {
+      const dataUrls = await pickOfferImages();
+      if (!dataUrls || dataUrls.length === 0) return;
+      setForm((f) => ({
+        ...f,
+        images: [...(f.images || []), ...dataUrls].slice(0, MAX_OFFER_IMAGES),
+      }));
+    } catch (err) {
+      Alert.alert(t('Upload failed'), err?.message || t('Could not upload image'));
+    }
+  }
+
+  function removeOfferImage(idx) {
+    setForm((f) => ({ ...f, images: (f.images || []).filter((_, i) => i !== idx) }));
   }
 
   function detectLocation() {
@@ -303,6 +322,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
       latitude: form.latitude,
       longitude: form.longitude,
       category: 'Other',
+      images: Array.isArray(form.images) ? form.images : [],
     };
     resetForm();
     setTab('mine');
@@ -386,6 +406,54 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 value={form.description}
                 onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
               />
+            </FadeInUp>
+
+            <FadeInUp delay={40}>
+              <View style={fieldStyles.wrap}>
+                <Text style={fieldStyles.label}>{t('Photos (optional)')}</Text>
+                <View style={photoStyles.row}>
+                  {(form.images || []).map((src, i) => (
+                    <View key={i} style={photoStyles.thumbWrap}>
+                      <View
+                        style={[
+                          photoStyles.thumb,
+                          Platform.OS === 'web'
+                            ? {
+                                backgroundImage: `url("${src}")`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                              }
+                            : null,
+                        ]}
+                      />
+                      <Pressable
+                        onPress={() => removeOfferImage(i)}
+                        style={({ hovered }) => [
+                          photoStyles.removeBtn,
+                          hovered && photoStyles.removeBtnHover,
+                          Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                        ]}
+                        accessibilityLabel={t('Remove photo')}
+                      >
+                        <Text style={photoStyles.removeBtnText}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  {(form.images || []).length < MAX_OFFER_IMAGES ? (
+                    <Pressable
+                      onPress={handlePickOfferImages}
+                      style={({ hovered }) => [
+                        photoStyles.addBtn,
+                        hovered && photoStyles.addBtnHover,
+                        Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                      ]}
+                    >
+                      <Text style={photoStyles.addBtnPlus}>+</Text>
+                      <Text style={photoStyles.addBtnText}>{t('Add photos')}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
             </FadeInUp>
 
             <FadeInUp delay={50}>
@@ -566,6 +634,25 @@ function MyOfferCard({ offer, onRemove }) {
         <Text style={styles.myCardLocIcon}>📍</Text>
         <Text style={styles.myCardLoc}>{offer.location}</Text>
       </View>
+      {Array.isArray(offer.images) && offer.images.length > 0 ? (
+        <View style={styles.myCardPhotos}>
+          {offer.images.map((src, i) => (
+            <View
+              key={i}
+              style={[
+                styles.myCardPhoto,
+                Platform.OS === 'web'
+                  ? {
+                      backgroundImage: `url("${src}")`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }
+                  : null,
+              ]}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -679,6 +766,20 @@ const styles = StyleSheet.create({
   myCardFooter: { flexDirection: 'row', alignItems: 'center' },
   myCardLocIcon: { fontSize: 11, marginRight: 4 },
   myCardLoc: { fontSize: 12, color: colors.textSecondary },
+  myCardPhotos: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  myCardPhoto: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.sm || 8,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
 
   deleteBtn: {
     flexDirection: 'row',
@@ -810,6 +911,79 @@ const fieldStyles = StyleSheet.create({
     boxShadow: '0 0 0 4px rgba(122, 18, 48, 0.14)',
   },
   textArea: { minHeight: 96, textAlignVertical: 'top' },
+});
+
+const photoStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  thumbWrap: {
+    width: 72,
+    height: 72,
+    position: 'relative',
+  },
+  thumb: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 10,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  removeBtnHover: {
+    backgroundColor: colors.accent,
+  },
+  removeBtnText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 11,
+  },
+  addBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  addBtnHover: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  addBtnPlus: {
+    fontSize: 22,
+    fontWeight: '300',
+    color: colors.textSecondary,
+    lineHeight: 24,
+  },
+  addBtnText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.textTertiary,
+    textAlign: 'center',
+    letterSpacing: 0.2,
+    marginTop: 2,
+  },
 });
 
 const locStyles = StyleSheet.create({
