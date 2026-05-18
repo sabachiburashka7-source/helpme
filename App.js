@@ -40,7 +40,12 @@ export default function App() {
     if (!user) return;
     fetch('/api/offers')
       .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setDbOffers(data); })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setDbOffers(data);
+          setMyOffers(data.filter((o) => o.phone === user.phone));
+        }
+      })
       .catch(() => {});
   }, [user]);
 
