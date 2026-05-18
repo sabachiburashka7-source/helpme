@@ -4,59 +4,6 @@ import {
   StyleSheet, Linking, TextInput,
 } from 'react-native';
 
-const SAMPLE_OFFERS = [
-  {
-    id: '1',
-    name: 'Mike Johnson',
-    avatar: 'MJ',
-    description: 'Need help moving a refrigerator from living room to kitchen.',
-    price: 5,
-    location: 'Brooklyn, NY',
-    phone: '+1 555-0101',
-    category: 'Moving',
-  },
-  {
-    id: '2',
-    name: 'Sara Lee',
-    avatar: 'SL',
-    description: 'Need someone to assemble an IKEA desk. All parts and tools provided.',
-    price: 10,
-    location: 'Queens, NY',
-    phone: '+1 555-0102',
-    category: 'Assembly',
-  },
-  {
-    id: '3',
-    name: 'Tom Davis',
-    avatar: 'TD',
-    description: 'Help carrying heavy boxes from van to 2nd floor apartment.',
-    price: 15,
-    location: 'Manhattan, NY',
-    phone: '+1 555-0103',
-    category: 'Moving',
-  },
-  {
-    id: '4',
-    name: 'Anna White',
-    avatar: 'AW',
-    description: 'Need help hanging 3 picture frames. Drill available.',
-    price: 8,
-    location: 'Bronx, NY',
-    phone: '+1 555-0104',
-    category: 'Home',
-  },
-  {
-    id: '5',
-    name: 'Chris Park',
-    avatar: 'CP',
-    description: 'Rearranging bedroom furniture — bed, wardrobe, desk.',
-    price: 20,
-    location: 'Staten Island, NY',
-    phone: '+1 555-0105',
-    category: 'Moving',
-  },
-];
-
 const SVG_BY_CATEGORY = {
   Moving: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
@@ -120,7 +67,7 @@ export default function BrowseScreen({ dbOffers }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
-  const allOffers = [...dbOffers, ...SAMPLE_OFFERS];
+  const allOffers = dbOffers;
   const filtered = allOffers.filter((o) => {
     if (!search) return true;
     const q = search.toLowerCase();

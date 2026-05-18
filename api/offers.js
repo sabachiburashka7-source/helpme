@@ -19,6 +19,7 @@ module.exports = async function handler(req, res) {
     console.log('[offers] <- status', r.status, 'body[0..300]:', text.slice(0, 300));
     let data;
     try { data = JSON.parse(text); } catch { data = { error: text }; }
+    if (!r.ok) data._debug = { fullUrl, supabaseStatus: r.status };
     return { ok: r.ok, status: r.status, data };
   }
 
