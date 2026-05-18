@@ -57,7 +57,7 @@ export default function App() {
     // Only persist non-UI fields to Supabase
     const { generatingImage, ...persistPatch } = patch;
     if (Object.keys(persistPatch).length > 0) {
-      fetch('/api/update-offer', {
+      fetch('/api/offers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...persistPatch }),
