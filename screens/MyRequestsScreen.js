@@ -4,10 +4,47 @@ import {
   StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { colors, radius, shadows, transitions, typography } from '../components/theme';
-import { Button } from '../components/Button';
 import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
 import MapPicker from '../components/MapPicker';
+
+const KEYFRAMES_ID = 'live-gradient-keyframes';
+function ensureKeyframes() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  if (document.getElementById(KEYFRAMES_ID)) return;
+  const tag = document.createElement('style');
+  tag.id = KEYFRAMES_ID;
+  tag.textContent = `
+    @keyframes liveGradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes liveGradientLine {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 200% 50%; }
+    }
+  `;
+  document.head.appendChild(tag);
+}
+
+const liveDark = Platform.OS === 'web'
+  ? {
+      backgroundImage:
+        'linear-gradient(120deg, #050505 0%, #1c1c1c 25%, #595959 50%, #1c1c1c 75%, #050505 100%)',
+      backgroundSize: '300% 300%',
+      animation: 'liveGradient 8s ease-in-out infinite',
+    }
+  : { backgroundColor: '#0a0a0a' };
+
+const liveLine = Platform.OS === 'web'
+  ? {
+      backgroundImage:
+        'linear-gradient(90deg, #050505 0%, #c4c4c4 50%, #050505 100%)',
+      backgroundSize: '200% 100%',
+      animation: 'liveGradientLine 3.5s linear infinite',
+    }
+  : { backgroundColor: '#0a0a0a' };
 
 function Field({ label, multiline, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
@@ -37,6 +74,98 @@ function Field({ label, multiline, ...inputProps }) {
   );
 }
 
+function LiveTabs({ tabs, value, onChange }) {
+  const [width, setWidth] = useState(0);
+  const tx = useRef(new Animated.Value(0)).current;
+  const index = Math.max(0, tabs.findIndex((t) => t.value === value));
+  const segmentW = width > 0 ? width / tabs.length : 0;
+
+  useEffect(() => {
+    if (segmentW === 0) return;
+    Animated.spring(tx, {
+      toValue: segmentW * index,
+      useNativeDriver: true,
+      speed: 22,
+      bounciness: 6,
+    }).start();
+  }, [index, segmentW, tx]);
+
+  return (
+    <View style={tabStyles.wrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      <View style={tabStyles.row}>
+        {tabs.map((t) => {
+          const active = t.value === value;
+          return (
+            <Pressable
+              key={t.value}
+              onPress={() => onChange(t.value)}
+              style={({ hovered }) => [
+                tabStyles.tab,
+                Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                hovered && !active && tabStyles.tabHover,
+              ]}
+            >
+              <Text style={[tabStyles.text, active && tabStyles.textActive]}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={tabStyles.track}>
+        {segmentW > 0 ? (
+          <Animated.View
+            style={[
+              tabStyles.thumb,
+              liveLine,
+              { width: segmentW - 24, transform: [{ translateX: tx }], marginLeft: 12 },
+            ]}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function GradientButton({ title, onPress, size = 'lg' }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const animate = (to) =>
+    Animated.spring(scale, { toValue: to, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+
+  return (
+    <Animated.View style={{ transform: [{ scale }], alignSelf: 'stretch' }}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => animate(0.97)}
+        onPressOut={() => animate(1)}
+        style={({ hovered }) => [
+          gradStyles.base,
+          size === 'lg' && gradStyles.lg,
+          size === 'md' && gradStyles.md,
+          liveDark,
+          hovered && gradStyles.hover,
+          Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+        ]}
+      >
+        <Text style={gradStyles.text}>{title}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function OutlinePill({ title, onPress }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ hovered }) => [
+        pillStyles.base,
+        hovered && pillStyles.hover,
+        Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+      ]}
+    >
+      <Text style={pillStyles.text}>{title}</Text>
+    </Pressable>
+  );
+}
+
 function LoadingState() {
   const pulse = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
@@ -51,7 +180,7 @@ function LoadingState() {
   }, [pulse]);
   return (
     <View style={styles.empty}>
-      <Animated.View style={[styles.emptyDot, { opacity: pulse }]} />
+      <Animated.View style={[styles.emptyDot, liveDark, { opacity: pulse }]} />
       <Text style={styles.emptyTitle}>Loading requests…</Text>
       <Text style={styles.emptySub}>Hang tight</Text>
     </View>
@@ -59,12 +188,14 @@ function LoadingState() {
 }
 
 export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onLogout }) {
+  useEffect(() => { ensureKeyframes(); }, []);
+
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
     description: '', price: '', location: '', latitude: null, longitude: null,
   });
-  const [locationMode, setLocationMode] = useState('manual'); // 'manual' | 'gps'
-  const [gpsStatus, setGpsStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
+  const [locationMode, setLocationMode] = useState('manual');
+  const [gpsStatus, setGpsStatus] = useState('idle');
   const [gpsError, setGpsError] = useState('');
 
   function resetForm() {
@@ -160,40 +291,33 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.container}>
-        {/* Profile */}
+        {/* Profile — centered, symmetric */}
         <FadeInUp>
           <View style={styles.profile}>
-            <View style={styles.avatar}>
+            {onLogout ? (
+              <View style={styles.signOutWrap}>
+                <OutlinePill title="Sign out" onPress={onLogout} />
+              </View>
+            ) : null}
+            <View style={[styles.avatar, liveDark]}>
               <Text style={styles.avatarText}>{profile.avatar}</Text>
             </View>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={styles.profileName} numberOfLines={1}>{profile.name}</Text>
+            <Text style={styles.profileName} numberOfLines={1}>{profile.name}</Text>
+            {profile.phone ? (
               <Text style={styles.profileSub} numberOfLines={1}>{profile.phone}</Text>
-            </View>
-            {onLogout ? (
-              <Button
-                title="Sign out"
-                variant="outline"
-                size="sm"
-                fullWidth={false}
-                onPress={onLogout}
-              />
             ) : null}
           </View>
         </FadeInUp>
 
         {/* Tabs */}
-        <View style={styles.tabsWrap}>
-          <SegmentedTabs
-            tabs={[
-              { value: 'new', label: 'New request' },
-              { value: 'mine', label: 'Mine' },
-            ]}
-            value={tab}
-            onChange={setTab}
-            hideIndicator
-          />
-        </View>
+        <LiveTabs
+          tabs={[
+            { value: 'new', label: 'New request' },
+            { value: 'mine', label: 'Mine' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
 
         {tab === 'new' ? (
           <ScrollView
@@ -276,16 +400,24 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                     ) : gpsStatus === 'loading' ? (
                       <Text style={locStyles.gpsHint}>Detecting your location…</Text>
                     ) : (
-                      <>
+                      <View style={locStyles.gpsCenter}>
                         <Text style={locStyles.gpsHint}>
                           {gpsStatus === 'error'
                             ? gpsError || 'Could not get location'
                             : 'Tap detect to pin your current location on the map'}
                         </Text>
-                        <Pressable onPress={detectLocation} style={locStyles.gpsBtn}>
+                        <Pressable
+                          onPress={detectLocation}
+                          style={({ hovered }) => [
+                            locStyles.gpsBtn,
+                            liveDark,
+                            hovered && { opacity: 0.92 },
+                            Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                          ]}
+                        >
                           <Text style={locStyles.gpsBtnText}>Detect my location</Text>
                         </Pressable>
-                      </>
+                      </View>
                     )}
                   </View>
                 ) : (
@@ -305,7 +437,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
             <View style={{ height: 24 }} />
             <FadeInUp delay={150}>
-              <Button title="Post request" size="lg" onPress={handleSubmit} />
+              <GradientButton title="Post request" onPress={handleSubmit} />
             </FadeInUp>
             <View style={{ height: 32 }} />
           </ScrollView>
@@ -320,7 +452,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
               ) : (
                 <FadeInUp>
                   <View style={styles.empty}>
-                    <View style={styles.emptyDot} />
+                    <View style={[styles.emptyDot, liveDark]} />
                     <Text style={styles.emptyTitle}>No requests yet</Text>
                     <Text style={styles.emptySub}>Tap "New request" to post your first one</Text>
                   </View>
@@ -348,7 +480,7 @@ function MyOfferCard({ offer }) {
         <View style={[styles.myCardImage, { backgroundImage: `url("${offer.image}")` }]} />
       ) : offer.generatingImage ? (
         <View style={styles.myCardImagePlaceholder}>
-          <View style={styles.spinDot} />
+          <View style={[styles.spinDot, liveDark]} />
           <Text style={styles.myCardImagePlaceholderText}>Generating image…</Text>
         </View>
       ) : null}
@@ -368,27 +500,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
 
   profile: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 24,
-    paddingBottom: 10,
+    paddingTop: 28,
+    paddingBottom: 18,
     paddingHorizontal: 20,
+    position: 'relative',
+  },
+  signOutWrap: {
+    position: 'absolute',
+    top: 18,
+    right: 20,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.accent,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-    ...shadows.button,
+    marginBottom: 10,
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
   },
-  avatarText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  profileName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  profileSub: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
-
-  tabsWrap: { paddingHorizontal: 20 },
+  avatarText: { color: '#fff', fontWeight: '700', fontSize: 20, letterSpacing: 0.5 },
+  profileName: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  profileSub: { fontSize: 12, color: colors.textTertiary, marginTop: 2, textAlign: 'center' },
 
   form: { paddingHorizontal: 20, paddingTop: 16 },
 
@@ -398,7 +532,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: colors.surfaceAlt,
     marginBottom: 14,
   },
   emptyTitle: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
@@ -437,7 +570,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accent,
     marginRight: 8,
   },
   myCardImagePlaceholderText: {
@@ -459,6 +591,85 @@ const styles = StyleSheet.create({
   myCardLoc: { fontSize: 12, color: colors.textSecondary },
 });
 
+const tabStyles = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: 20,
+    marginBottom: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  tabHover: { opacity: 0.85 },
+  text: {
+    fontSize: 14,
+    color: colors.textTertiary,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+  },
+  textActive: {
+    color: colors.text,
+    fontWeight: '700',
+  },
+  track: {
+    height: 2,
+    backgroundColor: colors.border,
+    borderRadius: 2,
+    marginTop: 0,
+    position: 'relative',
+  },
+  thumb: {
+    position: 'absolute',
+    top: 0,
+    height: 2,
+    borderRadius: 2,
+  },
+});
+
+const gradStyles = StyleSheet.create({
+  base: {
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.22)',
+  },
+  md: { paddingVertical: 13, paddingHorizontal: 18 },
+  lg: { paddingVertical: 15, paddingHorizontal: 22 },
+  hover: { boxShadow: '0 14px 30px rgba(0, 0, 0, 0.28)' },
+  text: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+});
+
+const pillStyles = StyleSheet.create({
+  base: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  hover: {
+    borderColor: '#0a0a0a',
+    backgroundColor: colors.surfaceAlt,
+  },
+  text: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+});
+
 const fieldStyles = StyleSheet.create({
   wrap: { marginTop: 14 },
   label: { ...typography.label, marginBottom: 6 },
@@ -473,9 +684,9 @@ const fieldStyles = StyleSheet.create({
     color: colors.text,
   },
   inputFocused: {
-    borderColor: colors.accent,
+    borderColor: '#0a0a0a',
     backgroundColor: '#fff',
-    boxShadow: '0 0 0 4px rgba(79, 70, 229, 0.12)',
+    boxShadow: '0 0 0 4px rgba(10, 10, 10, 0.08)',
   },
   textArea: { minHeight: 96, textAlignVertical: 'top' },
 });
@@ -497,8 +708,8 @@ const locStyles = StyleSheet.create({
     alignItems: 'center',
   },
   modeBtnActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentSoft,
+    borderColor: '#0a0a0a',
+    backgroundColor: colors.surfaceAlt,
   },
   modeBtnText: {
     fontSize: 12,
@@ -506,7 +717,8 @@ const locStyles = StyleSheet.create({
     color: colors.textSecondary,
   },
   modeBtnTextActive: {
-    color: colors.accent,
+    color: '#0a0a0a',
+    fontWeight: '700',
   },
   gpsBox: {
     backgroundColor: colors.surface,
@@ -516,16 +728,22 @@ const locStyles = StyleSheet.create({
     padding: 14,
     alignItems: 'stretch',
   },
+  gpsCenter: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
   gpsTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 4,
+    textAlign: 'center',
   },
   gpsHelp: {
     fontSize: 12,
     color: colors.textTertiary,
     marginBottom: 10,
+    textAlign: 'center',
   },
   gpsFooter: {
     flexDirection: 'row',
@@ -541,19 +759,21 @@ const locStyles = StyleSheet.create({
   gpsHint: {
     fontSize: 13,
     color: colors.textTertiary,
-    marginBottom: 10,
+    marginBottom: 14,
     lineHeight: 18,
+    textAlign: 'center',
   },
   gpsBtn: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: radius.pill,
+    alignSelf: 'center',
   },
   gpsBtnText: {
     color: '#fff',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   gpsRefresh: {
     paddingHorizontal: 12,
