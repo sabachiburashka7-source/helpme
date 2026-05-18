@@ -19,44 +19,32 @@ export function pickProfileImage() {
     input.accept = 'image/*';
     input.style.display = 'none';
 
-    let settled = false;
-    const cleanup = () => {
+    let done = false;
+    const finish = (fn, value) => {
+      if (done) return;
+      done = true;
       input.remove();
-      window.removeEventListener('focus', onFocus);
+      fn(value);
     };
 
-    const onFocus = () => {
-      setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          resolve(null);
-        }
-      }, 300);
-    };
-
-    input.onchange = async () => {
+    input.addEventListener('change', async () => {
       const file = input.files && input.files[0];
       if (!file) {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          resolve(null);
-        }
+        finish(resolve, null);
         return;
       }
-      settled = true;
       try {
         const dataUrl = await resizeImageFile(file);
-        cleanup();
-        resolve(dataUrl);
+        finish(resolve, dataUrl);
       } catch (err) {
-        cleanup();
-        reject(err);
+        finish(reject, err);
       }
-    };
+    });
 
-    window.addEventListener('focus', onFocus);
+    input.addEventListener('cancel', () => {
+      finish(resolve, null);
+    });
+
     document.body.appendChild(input);
     input.click();
   });
