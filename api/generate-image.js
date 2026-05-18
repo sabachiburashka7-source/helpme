@@ -3,9 +3,9 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' });
+    return res.status(500).json({ error: 'GOOGLE_API_KEY not configured on server' });
   }
 
   const { description, category } = req.body || {};
@@ -21,34 +21,36 @@ module.exports = async function handler(req, res) {
     `no text, no logos, no people's faces in close-up. Friendly and approachable.`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-image-2',
-        prompt,
-        n: 1,
-        size: '1024x1024',
-        quality: 'low',
-        response_format: 'b64_json',
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }], role: 'user' }],
+          generationConfig: {
+            responseModalities: ['IMAGE'],
+            responseMimeType: 'image/png',
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('OpenAI error', response.status, errText);
+      console.error('Gemini error', response.status, errText);
       return res.status(response.status).json({ error: 'Image generation failed' });
     }
 
     const data = await response.json();
-    const b64 = data?.data?.[0]?.b64_json;
+    const part = data?.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
+    const b64 = part?.inlineData?.data;
+    const mime = part?.inlineData?.mimeType || 'image/png';
     if (!b64) {
+      console.error('No image in Gemini response', JSON.stringify(data));
       return res.status(500).json({ error: 'No image returned' });
     }
-    res.json({ image: `data:image/png;base64,${b64}` });
+    res.json({ image: `data:${mime};base64,${b64}` });
   } catch (err) {
     console.error('generate-image exception', err);
     res.status(500).json({ error: 'Internal error' });
