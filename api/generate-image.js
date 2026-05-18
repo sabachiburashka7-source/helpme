@@ -19,7 +19,8 @@ module.exports = async function handler(req, res) {
   const prompt =
     `Minimalist editorial illustration representing a help-request: "${safeDescription}". ` +
     `Category: ${safeCategory}. Clean modern flat style, soft neutral background, ` +
-    `no text, no logos, no people's faces in close-up. Friendly and approachable.`;
+    `no text, no logos, no people's faces in close-up. Friendly and approachable. ` +
+    `Composed for a 16:9 widescreen frame with the subject centered and breathing room on the sides.`;
 
   try {
     const response = await fetch('https://api.openai.com/v1/images/generations', {
@@ -32,7 +33,7 @@ module.exports = async function handler(req, res) {
         model: 'gpt-image-2',
         prompt,
         n: 1,
-        size: '1024x1024',
+        size: '2048x1152',
         quality: 'low',
       }),
     });

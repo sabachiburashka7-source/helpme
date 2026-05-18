@@ -272,9 +272,9 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     width: '100%',
-    height: 180,
+    aspectRatio: 16 / 9,
     backgroundColor: '#fff',
-    backgroundSize: 'contain',
+    backgroundSize: 'cover',
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
     alignItems: 'center',
@@ -326,9 +326,9 @@ const styles = StyleSheet.create({
   },
   modalImage: {
     width: '100%',
-    height: 220,
+    aspectRatio: 16 / 9,
     backgroundColor: '#fff',
-    backgroundSize: 'contain',
+    backgroundSize: 'cover',
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
   },

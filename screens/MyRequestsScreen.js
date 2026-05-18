@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   },
   myCardImage: {
     width: '100%',
-    height: 160,
+    aspectRatio: 16 / 9,
     backgroundColor: '#F5F5F5',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   },
   myCardImagePlaceholder: {
     width: '100%',
-    height: 160,
+    aspectRatio: 16 / 9,
     backgroundColor: '#F5F5F5',
     borderRadius: 10,
     marginBottom: 12,
