@@ -116,11 +116,11 @@ function imageSizeFor(offer) {
   return offer.image ? 'cover' : 'contain';
 }
 
-export default function BrowseScreen({ myOffers }) {
+export default function BrowseScreen({ dbOffers }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
-  const allOffers = [...myOffers, ...SAMPLE_OFFERS];
+  const allOffers = [...dbOffers, ...SAMPLE_OFFERS];
   const filtered = allOffers.filter((o) => {
     if (!search) return true;
     const q = search.toLowerCase();

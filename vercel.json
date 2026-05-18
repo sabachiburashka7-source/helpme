@@ -2,10 +2,14 @@
   "version": 2,
   "builds": [
     { "src": "api/generate-image.js", "use": "@vercel/node" },
+    { "src": "api/offers.js", "use": "@vercel/node" },
+    { "src": "api/update-offer.js", "use": "@vercel/node" },
     { "src": "dist/**", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/api/generate-image", "dest": "/api/generate-image.js" },
+    { "src": "/api/offers", "dest": "/api/offers.js" },
+    { "src": "/api/update-offer", "dest": "/api/update-offer.js" },
     { "src": "/_expo/(.*)", "dest": "/dist/_expo/$1" },
     { "src": "/favicon.ico", "dest": "/dist/favicon.ico" },
     { "src": "/(.*)", "dest": "/dist/index.html" }

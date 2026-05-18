@@ -36,16 +36,17 @@ export default function MyRequestsScreen({ myOffers, onAddOffer, onUpdateOffer }
     }
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!form.description.trim()) return Alert.alert('Missing', 'Add a description.');
     if (!form.price.trim()) return Alert.alert('Missing', 'Add a price.');
     if (!form.location.trim()) return Alert.alert('Missing', 'Add a location.');
-    const id = onAddOffer({ ...form, price: Number(form.price), generatingImage: true });
-    if (id && onUpdateOffer) {
-      generateImage(id, form.description, form.category);
-    }
+    const { description, category } = form;
     setForm({ description: '', price: '', location: '', category: 'Moving' });
     setTab('mine');
+    const id = await onAddOffer({ ...form, price: Number(form.price) });
+    if (id && onUpdateOffer) {
+      generateImage(id, description, category);
+    }
   }
 
   return (

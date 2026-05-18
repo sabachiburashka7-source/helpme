@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -6,25 +6,63 @@ import BrowseScreen from './screens/BrowseScreen';
 import MyRequestsScreen from './screens/MyRequestsScreen';
 
 const Tab = createBottomTabNavigator();
-let nextId = 100;
+let tempCounter = 0;
 
 export default function App() {
+  const [dbOffers, setDbOffers] = useState([]);
   const [myOffers, setMyOffers] = useState([]);
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isWideScreen = isWeb && width > 480;
 
-  function addOffer(offer) {
-    const id = String(nextId++);
-    setMyOffers((prev) => [
-      { ...offer, id, name: 'You', avatar: 'ME', phone: '+1 555-9999' },
-      ...prev,
-    ]);
-    return id;
+  useEffect(() => {
+    fetch('/api/offers')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setDbOffers(data); })
+      .catch(() => {});
+  }, []);
+
+  async function addOffer(offer) {
+    const offerData = { ...offer, name: 'You', avatar: 'ME', phone: '+1 555-9999' };
+    delete offerData.generatingImage;
+
+    // Show immediately in local state while DB save is in-flight
+    const tempId = 'temp-' + (++tempCounter);
+    const localOffer = { ...offerData, id: tempId, generatingImage: true };
+    setMyOffers((prev) => [localOffer, ...prev]);
+    setDbOffers((prev) => [localOffer, ...prev]);
+
+    try {
+      const r = await fetch('/api/offers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(offerData),
+      });
+      const saved = await r.json();
+      if (saved && saved.id) {
+        const savedWithFlag = { ...saved, generatingImage: true };
+        setMyOffers((prev) => prev.map((o) => (o.id === tempId ? savedWithFlag : o)));
+        setDbOffers((prev) => prev.map((o) => (o.id === tempId ? savedWithFlag : o)));
+        return saved.id;
+      }
+    } catch {}
+
+    return tempId;
   }
 
   function updateOffer(id, patch) {
     setMyOffers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+    setDbOffers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+
+    // Only persist non-UI fields to Supabase
+    const { generatingImage, ...persistPatch } = patch;
+    if (Object.keys(persistPatch).length > 0) {
+      fetch('/api/update-offer', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...persistPatch }),
+      }).catch(() => {});
+    }
   }
 
   const AppContent = (
@@ -60,7 +98,7 @@ export default function App() {
         })}
       >
         <Tab.Screen name="Browse">
-          {() => <BrowseScreen myOffers={myOffers} />}
+          {() => <BrowseScreen dbOffers={dbOffers} />}
         </Tab.Screen>
         <Tab.Screen name="My Requests">
           {() => (
