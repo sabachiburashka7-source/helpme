@@ -1,4 +1,5 @@
 module.exports = async function handler(req, res) {
+  console.log('[generate-image] called', req.method);
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

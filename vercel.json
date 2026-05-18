@@ -5,9 +5,9 @@
     { "src": "dist/**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "/api/generate-image", "dest": "/api/generate-image.js" },
     { "src": "/_expo/(.*)", "dest": "/dist/_expo/$1" },
     { "src": "/favicon.ico", "dest": "/dist/favicon.ico" },
-    { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/dist/index.html" }
   ]
 }
