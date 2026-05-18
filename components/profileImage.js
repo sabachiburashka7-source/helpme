@@ -78,3 +78,78 @@ function resizeImageFile(file) {
     reader.readAsDataURL(file);
   });
 }
+
+const OFFER_MAX_SIZE = 1024;
+const OFFER_JPEG_QUALITY = 0.82;
+
+export function pickOfferImages() {
+  return new Promise((resolve, reject) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      reject(new Error('File picker is only available on web'));
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.style.display = 'none';
+
+    let done = false;
+    const finish = (fn, value) => {
+      if (done) return;
+      done = true;
+      input.remove();
+      fn(value);
+    };
+
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      if (files.length === 0) {
+        finish(resolve, []);
+        return;
+      }
+      try {
+        const results = await Promise.all(files.map((f) => resizeOfferImageFile(f)));
+        finish(resolve, results);
+      } catch (err) {
+        finish(reject, err);
+      }
+    });
+
+    input.addEventListener('cancel', () => {
+      finish(resolve, []);
+    });
+
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function resizeOfferImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.onload = () => {
+        const { width, height } = img;
+        const scale = Math.min(1, OFFER_MAX_SIZE / Math.max(width, height));
+        const w = Math.round(width * scale);
+        const h = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', OFFER_JPEG_QUALITY));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
