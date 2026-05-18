@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TextInput, Pressable,
+  View, Text, ScrollView, TextInput, Pressable, Animated, Easing,
   StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { colors, radius, shadows, transitions, typography } from '../components/theme';
@@ -37,7 +37,28 @@ function Field({ label, multiline, ...inputProps }) {
   );
 }
 
-export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateOffer, onLogout }) {
+function LoadingState() {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return (
+    <View style={styles.empty}>
+      <Animated.View style={[styles.emptyDot, { opacity: pulse }]} />
+      <Text style={styles.emptyTitle}>Loading requests…</Text>
+      <Text style={styles.emptySub}>Hang tight</Text>
+    </View>
+  );
+}
+
+export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onLogout }) {
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
     description: '', price: '', location: '', latitude: null, longitude: null,
@@ -294,13 +315,17 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
             showsVerticalScrollIndicator={false}
           >
             {myOffers.length === 0 ? (
-              <FadeInUp>
-                <View style={styles.empty}>
-                  <View style={styles.emptyDot} />
-                  <Text style={styles.emptyTitle}>No requests yet</Text>
-                  <Text style={styles.emptySub}>Tap "New request" to post your first one</Text>
-                </View>
-              </FadeInUp>
+              loading ? (
+                <LoadingState />
+              ) : (
+                <FadeInUp>
+                  <View style={styles.empty}>
+                    <View style={styles.emptyDot} />
+                    <Text style={styles.emptyTitle}>No requests yet</Text>
+                    <Text style={styles.emptySub}>Tap "New request" to post your first one</Text>
+                  </View>
+                </FadeInUp>
+              )
             ) : (
               myOffers.map((offer, i) => (
                 <FadeInUp key={offer.id} delay={Math.min(i * 40, 240)}>

@@ -83,7 +83,7 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-export default function BrowseScreen({ dbOffers }) {
+export default function BrowseScreen({ dbOffers, loading }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -185,11 +185,15 @@ export default function BrowseScreen({ dbOffers }) {
         scrollEventThrottle={16}
       >
         {filtered.length === 0 && (
-          <View style={styles.empty}>
-            <View style={styles.emptyDot} />
-            <Text style={styles.emptyTitle}>No matches</Text>
-            <Text style={styles.emptySub}>Try a different search</Text>
-          </View>
+          loading ? (
+            <LoadingState />
+          ) : (
+            <View style={styles.empty}>
+              <View style={styles.emptyDot} />
+              <Text style={styles.emptyTitle}>No matches</Text>
+              <Text style={styles.emptySub}>Try a different search</Text>
+            </View>
+          )
         )}
         {filtered.map((offer, i) => (
           <FadeInUp key={offer.id} delay={Math.min(i * 40, 240)}>
@@ -240,6 +244,27 @@ export default function BrowseScreen({ dbOffers }) {
       </Animated.View>
 
       <DetailsModal offer={selected} onClose={() => setSelected(null)} />
+    </View>
+  );
+}
+
+function LoadingState() {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return (
+    <View style={styles.empty}>
+      <Animated.View style={[styles.emptyDot, { opacity: pulse }]} />
+      <Text style={styles.emptyTitle}>Loading requests…</Text>
+      <Text style={styles.emptySub}>Hang tight</Text>
     </View>
   );
 }

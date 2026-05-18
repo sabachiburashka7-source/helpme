@@ -33,12 +33,14 @@ export default function App() {
   const [user, setUser] = useState(() => loadStoredUser());
   const [dbOffers, setDbOffers] = useState([]);
   const [myOffers, setMyOffers] = useState([]);
+  const [offersLoading, setOffersLoading] = useState(true);
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isWideScreen = isWeb && width > 480;
 
   useEffect(() => {
     if (!user) return;
+    setOffersLoading(true);
     fetch('/api/offers')
       .then((r) => r.json())
       .then((data) => {
@@ -47,7 +49,8 @@ export default function App() {
           setMyOffers(data.filter((o) => o.phone === user.phone));
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setOffersLoading(false));
   }, [user]);
 
   function handleAuthenticated(u) {
@@ -151,13 +154,14 @@ export default function App() {
         })}
       >
         <Tab.Screen name="Browse">
-          {() => <BrowseScreen dbOffers={dbOffers} />}
+          {() => <BrowseScreen dbOffers={dbOffers} loading={offersLoading} />}
         </Tab.Screen>
         <Tab.Screen name="My Requests">
           {() => (
             <MyRequestsScreen
               user={user}
               myOffers={myOffers}
+              loading={offersLoading}
               onAddOffer={addOffer}
               onUpdateOffer={updateOffer}
               onLogout={handleLogout}
