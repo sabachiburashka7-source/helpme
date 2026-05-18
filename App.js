@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import BrowseScreen from './screens/BrowseScreen';
 import MyRequestsScreen from './screens/MyRequestsScreen';
 import AuthScreen from './screens/AuthScreen';
+import { colors, radius } from './components/theme';
 
 const Tab = createBottomTabNavigator();
 const STORAGE_KEY = 'helpme.user';
@@ -115,26 +116,30 @@ export default function App() {
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarStyle: {
-            backgroundColor: '#fff',
-            borderTopColor: '#EEE',
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
             borderTopWidth: 1,
-            height: 68,
-            paddingBottom: 8,
-            paddingTop: 8,
+            height: 72,
+            paddingBottom: 10,
+            paddingTop: 10,
             elevation: 0,
             shadowOpacity: 0,
           },
-          tabBarActiveTintColor: '#000',
-          tabBarInactiveTintColor: '#BBB',
-          tabBarLabelStyle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4 },
+          tabBarActiveTintColor: colors.accent,
+          tabBarInactiveTintColor: colors.textTertiary,
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, marginTop: 2 },
           tabBarIcon: ({ color, focused }) => {
             const isBrowse = route.name === 'Browse';
-            const glyph = isBrowse ? (focused ? '◉' : '◎') : (focused ? '▣' : '☰');
             return (
               <View style={styles.iconWrap}>
-                <View style={[styles.indicator, focused && styles.indicatorActive]} />
-                <View style={[styles.iconPill, focused && styles.iconPillActive]}>
-                  <Text style={{ fontSize: 18, color, fontWeight: '600' }}>{glyph}</Text>
+                <View
+                  style={[
+                    styles.iconPill,
+                    focused && styles.iconPillActive,
+                    Platform.OS === 'web' && { transition: 'all 200ms cubic-bezier(0.2, 0.8, 0.2, 1)' },
+                  ]}
+                >
+                  {isBrowse ? <BrowseIcon color={color} /> : <RequestsIcon color={color} />}
                 </View>
               </View>
             );
@@ -171,10 +176,36 @@ export default function App() {
   return Content;
 }
 
+function BrowseIcon({ color }) {
+  return (
+    <View style={styles.iconBox}>
+      <View style={[styles.iconBar, { backgroundColor: color, width: 14, height: 2 }]} />
+      <View style={[styles.iconBar, { backgroundColor: color, width: 14, height: 2, marginTop: 3 }]} />
+      <View style={[styles.iconBar, { backgroundColor: color, width: 9, height: 2, marginTop: 3 }]} />
+    </View>
+  );
+}
+
+function RequestsIcon({ color }) {
+  return (
+    <View style={styles.iconBox}>
+      <View
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: 4,
+          borderWidth: 2,
+          borderColor: color,
+        }}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   webBg: {
     flex: 1,
-    backgroundColor: '#F2F2F2',
+    backgroundColor: '#EAEAEF',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
@@ -182,34 +213,33 @@ const styles = StyleSheet.create({
   phoneFrame: {
     width: 390,
     height: 780,
-    backgroundColor: '#fff',
-    borderRadius: 36,
+    backgroundColor: colors.bg,
+    borderRadius: 40,
     overflow: 'hidden',
     borderWidth: 8,
-    borderColor: '#1A1A1A',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+    borderColor: '#0A0A0A',
+    boxShadow: '0 30px 80px rgba(15, 15, 30, 0.28), 0 8px 20px rgba(15, 15, 30, 0.12)',
   },
   iconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  indicator: {
-    width: 24,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'transparent',
-    marginBottom: 4,
-  },
-  indicatorActive: {
-    backgroundColor: '#000',
-  },
   iconPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 3,
-    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
     backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconPillActive: {
-    backgroundColor: '#F2F2F2',
+    backgroundColor: colors.accentSoft,
   },
+  iconBox: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBar: { borderRadius: 1 },
 });

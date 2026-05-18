@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal,
-  StyleSheet, Linking, TextInput,
+  View, Text, ScrollView, Modal, Animated, Easing,
+  StyleSheet, Linking, TextInput, Pressable, Platform,
 } from 'react-native';
+import { colors, radius, shadows, transitions, typography } from '../components/theme';
+import { Button, PressableScale } from '../components/Button';
+import FadeInUp from '../components/FadeInUp';
 
 const SVG_BY_CATEGORY = {
   Moving: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <rect x='40' y='80' width='90' height='80'/>
       <path d='M40 105 L130 105'/>
       <path d='M85 80 L85 105'/>
@@ -18,7 +21,7 @@ const SVG_BY_CATEGORY = {
   </svg>`,
   Assembly: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <path d='M60 160 L160 80'/>
       <path d='M55 165 L70 150 L80 160 L65 175 Z'/>
       <path d='M150 70 L175 55 L200 55 L210 75 L195 90 L170 90 Z'/>
@@ -28,7 +31,7 @@ const SVG_BY_CATEGORY = {
   </svg>`,
   Home: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <path d='M40 170 L280 170'/>
       <path d='M80 90 L160 40 L240 90'/>
       <path d='M100 90 L100 170'/>
@@ -39,7 +42,7 @@ const SVG_BY_CATEGORY = {
   </svg>`,
   Other: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <circle cx='100' cy='75' r='20'/>
       <path d='M100 95 L100 155'/>
       <path d='M100 115 L72 145'/>
@@ -52,21 +55,17 @@ const SVG_BY_CATEGORY = {
 };
 
 function imageUrlFor(offer) {
-  if (offer.image) {
-    return `url("${offer.image}")`;
-  }
+  if (offer.image) return `url("${offer.image}")`;
   const svg = SVG_BY_CATEGORY[offer.category] || SVG_BY_CATEGORY.Other;
   return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
 }
-
-function imageSizeFor(offer) {
-  return offer.image ? 'cover' : 'contain';
-}
+const imageSizeFor = (offer) => (offer.image ? 'cover' : 'contain');
 
 export default function BrowseScreen({ dbOffers }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
+
   const allOffers = dbOffers.filter((o) => o.image);
   const filtered = allOffers.filter((o) => {
     if (!search) return true;
@@ -80,239 +79,394 @@ export default function BrowseScreen({ dbOffers }) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerBar}>
+        <View>
+          <Text style={styles.headerTitle}>Browse</Text>
+          <Text style={styles.headerSub}>
+            {filtered.length} {filtered.length === 1 ? 'request' : 'requests'} nearby
+          </Text>
+        </View>
+        <FilterButton
+          open={filterOpen}
+          onPress={() => {
+            if (filterOpen) setSearch('');
+            setFilterOpen((v) => !v);
+          }}
+        />
+      </View>
+
+      <SearchBar
+        open={filterOpen}
+        value={search}
+        onChange={setSearch}
+      />
+
       <ScrollView
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       >
         {filtered.length === 0 && (
-          <Text style={styles.empty}>No matches</Text>
+          <View style={styles.empty}>
+            <View style={styles.emptyDot} />
+            <Text style={styles.emptyTitle}>No matches</Text>
+            <Text style={styles.emptySub}>Try a different search</Text>
+          </View>
         )}
-        {filtered.map((offer) => (
-          <OfferCard key={offer.id} offer={offer} onPress={() => setSelected(offer)} />
+        {filtered.map((offer, i) => (
+          <FadeInUp key={offer.id} delay={Math.min(i * 40, 240)}>
+            <OfferCard offer={offer} onPress={() => setSelected(offer)} />
+          </FadeInUp>
         ))}
-        <View style={{ height: 16 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
-
-      {filterOpen && (
-        <View style={styles.searchOverlay}>
-          <TextInput
-            style={styles.search}
-            placeholder="Search requests…"
-            placeholderTextColor="#AAA"
-            value={search}
-            onChangeText={setSearch}
-            autoFocus
-          />
-        </View>
-      )}
-
-      <TouchableOpacity
-        style={[styles.filterBtn, filterOpen && styles.filterBtnActive]}
-        onPress={() => {
-          if (filterOpen) setSearch('');
-          setFilterOpen(!filterOpen);
-        }}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.filterBtnText}>{filterOpen ? '✕' : 'Filter'}</Text>
-      </TouchableOpacity>
 
       <DetailsModal offer={selected} onClose={() => setSelected(null)} />
     </View>
   );
 }
 
-function OfferCard({ offer, onPress }) {
+function FilterButton({ open, onPress }) {
+  const rot = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(rot, {
+      toValue: open ? 1 : 0,
+      useNativeDriver: true,
+      speed: 18,
+      bounciness: 8,
+    }).start();
+  }, [open, rot]);
+
+  const rotate = rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
+
   return (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.85}
-      onPress={onPress}
-    >
-      <View
+    <PressableScale onPress={onPress} hoverLift>
+      <Animated.View
         style={[
-          styles.cardImage,
-          { backgroundImage: imageUrlFor(offer), backgroundSize: imageSizeFor(offer) },
+          styles.filterBtn,
+          open && styles.filterBtnActive,
         ]}
       >
-        {offer.generatingImage && !offer.image ? (
-          <Text style={styles.imageLoading}>Generating image…</Text>
-        ) : null}
+        <Animated.Text style={[styles.filterBtnText, open && styles.filterBtnTextActive, { transform: [{ rotate }] }]}>
+          +
+        </Animated.Text>
+      </Animated.View>
+    </PressableScale>
+  );
+}
+
+function SearchBar({ open, value, onChange }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: open ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [open, anim]);
+
+  return (
+    <Animated.View
+      style={{
+        opacity: anim,
+        height: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 60] }),
+        overflow: 'hidden',
+      }}
+    >
+      <View style={styles.searchWrap}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput
+          style={[
+            styles.search,
+            Platform.OS === 'web' && { outlineStyle: 'none', transition: transitions.base },
+          ]}
+          placeholder="Search requests…"
+          placeholderTextColor={colors.textTertiary}
+          value={value}
+          onChangeText={onChange}
+          autoFocus={open}
+        />
       </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
-        <View style={styles.cardBottomRow}>
-          <Text style={styles.category}>{offer.category}</Text>
-          <Text style={styles.price}>${offer.price}</Text>
+    </Animated.View>
+  );
+}
+
+function OfferCard({ offer, onPress }) {
+  return (
+    <PressableScale onPress={onPress} hoverLift style={styles.cardWrap}>
+      <View style={styles.card}>
+        <View
+          style={[
+            styles.cardImage,
+            { backgroundImage: imageUrlFor(offer), backgroundSize: imageSizeFor(offer) },
+          ]}
+        >
+          {offer.generatingImage && !offer.image ? (
+            <View style={styles.imageLoadingBadge}>
+              <View style={styles.spinDot} />
+              <Text style={styles.imageLoadingText}>Generating image…</Text>
+            </View>
+          ) : null}
+          <View style={styles.cardPriceTag}>
+            <Text style={styles.cardPriceTagText}>${offer.price}</Text>
+          </View>
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
+          <View style={styles.cardBottomRow}>
+            <View style={styles.catChip}>
+              <Text style={styles.catChipText}>{offer.category}</Text>
+            </View>
+            <Text style={styles.cardName}>{offer.name}</Text>
+          </View>
         </View>
       </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
 
 function DetailsModal({ offer, onClose }) {
-  if (!offer) return null;
+  const open = !!offer;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.94)).current;
+  const [renderOffer, setRenderOffer] = useState(offer);
+
+  useEffect(() => {
+    if (open) setRenderOffer(offer);
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: open ? 1 : 0,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: open ? 1 : 0.94,
+        useNativeDriver: true,
+        speed: 18,
+        bounciness: 6,
+      }),
+    ]).start(({ finished }) => {
+      if (finished && !open) setRenderOffer(null);
+    });
+  }, [open, offer, opacity, scale]);
+
+  if (!renderOffer && !open) return null;
+  const data = offer || renderOffer;
+  if (!data) return null;
+
   return (
-    <Modal
-      visible={!!offer}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        style={styles.modalBackdrop}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <TouchableOpacity
-          style={styles.modalCard}
-          activeOpacity={1}
-          onPress={() => {}}
-        >
+    <Modal visible={open || !!renderOffer} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[styles.modalBackdrop, { opacity }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Animated.View style={[styles.modalCard, { transform: [{ scale }] }]}>
           <View
             style={[
               styles.modalImage,
-              { backgroundImage: imageUrlFor(offer), backgroundSize: imageSizeFor(offer) },
+              { backgroundImage: imageUrlFor(data), backgroundSize: imageSizeFor(data) },
             ]}
           />
 
           <View style={styles.modalBody}>
             <View style={styles.modalHeaderRow}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{offer.avatar}</Text>
+                <Text style={styles.avatarText}>{data.avatar}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalName}>{offer.name}</Text>
-                <Text style={styles.modalSub}>{offer.category}</Text>
+                <Text style={styles.modalName}>{data.name}</Text>
+                <View style={styles.catChipInline}>
+                  <Text style={styles.catChipText}>{data.category}</Text>
+                </View>
               </View>
-              <Text style={styles.modalPrice}>${offer.price}</Text>
+              <Text style={styles.modalPrice}>${data.price}</Text>
             </View>
 
-            <Text style={styles.modalDesc}>{offer.description}</Text>
+            <Text style={styles.modalDesc}>{data.description}</Text>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Location</Text>
-              <Text style={styles.detailValue}>{offer.location}</Text>
+            <View style={styles.detailGroup}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Location</Text>
+                <Text style={styles.detailValue}>{data.location}</Text>
+              </View>
+              <View style={[styles.detailRow, styles.detailRowLast]}>
+                <Text style={styles.detailLabel}>Number</Text>
+                <Text style={styles.detailValue}>{data.phone}</Text>
+              </View>
             </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Number</Text>
-              <Text style={styles.detailValue}>{offer.phone}</Text>
-            </View>
 
-            <TouchableOpacity
-              style={styles.callBtn}
-              onPress={() => Linking.openURL(`tel:${offer.phone}`)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.callBtnText}>Call</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={onClose}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.closeBtnText}>Close</Text>
-            </TouchableOpacity>
+            <View style={{ height: 16 }} />
+            <Button
+              title="Call now"
+              size="lg"
+              onPress={() => Linking.openURL(`tel:${data.phone}`)}
+            />
+            <View style={{ height: 4 }} />
+            <Button title="Close" variant="ghost" size="md" onPress={onClose} />
           </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  container: { flex: 1, backgroundColor: colors.bg },
 
-  list: { paddingTop: 60, paddingHorizontal: 16, paddingBottom: 16 },
-  empty: { textAlign: 'center', color: '#BBB', marginTop: 80, fontSize: 14 },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+  },
+  headerTitle: { ...typography.h1, fontSize: 24 },
+  headerSub: { ...typography.caption, color: colors.textTertiary, marginTop: 4 },
+
+  list: { paddingHorizontal: 16, paddingBottom: 16 },
+  empty: { alignItems: 'center', paddingTop: 80 },
+  emptyDot: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
+    marginBottom: 14,
+  },
+  emptyTitle: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
+  emptySub: { fontSize: 13, color: colors.textTertiary, marginTop: 4 },
 
   filterBtn: {
-    position: 'absolute',
-    top: 52,
-    right: 16,
-    backgroundColor: '#000',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    shadowColor: '#000',
+    backgroundColor: colors.text,
+    borderRadius: radius.pill,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.button,
+    shadowColor: '#0F0F1E',
     shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
   },
-  filterBtnActive: { backgroundColor: '#444' },
-  filterBtnText: { color: '#fff', fontSize: 12, fontWeight: '600', letterSpacing: 0.4 },
+  filterBtnActive: { backgroundColor: colors.accent },
+  filterBtnText: { color: '#fff', fontSize: 22, fontWeight: '300', lineHeight: 24 },
+  filterBtnTextActive: { color: '#fff' },
 
-  searchOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingTop: 48,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    backgroundColor: 'rgba(250,250,250,0.97)',
+  searchWrap: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
   },
+  searchIcon: { fontSize: 16, color: colors.textTertiary, marginRight: 8 },
   search: {
-    backgroundColor: '#F0F0F0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
+    flex: 1,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#000',
+    color: colors.text,
   },
 
+  cardWrap: { marginBottom: 12 },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#EEE',
+    borderColor: colors.border,
     overflow: 'hidden',
+    ...shadows.card,
   },
   cardImage: {
     width: '100%',
     aspectRatio: 16 / 9,
-    backgroundColor: '#fff',
-    backgroundSize: 'cover',
+    backgroundColor: colors.surfaceAlt,
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
-  imageLoading: {
-    fontSize: 12,
-    color: '#999',
-    backgroundColor: 'rgba(255,255,255,0.85)',
+  cardPriceTag: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(10, 10, 10, 0.86)',
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    letterSpacing: 0.4,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
   },
+  cardPriceTagText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  imageLoadingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  spinDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    marginRight: 8,
+  },
+  imageLoadingText: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
+
   cardBody: { padding: 14 },
-  desc: { fontSize: 14, color: '#222', lineHeight: 20, marginBottom: 10 },
+  desc: { fontSize: 14, color: colors.text, lineHeight: 20, marginBottom: 12 },
   cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  category: { fontSize: 11, color: '#999', textTransform: 'uppercase', letterSpacing: 0.8 },
-  price: { fontSize: 20, fontWeight: '700', color: '#000' },
+  catChip: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentSoftBorder,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  catChipInline: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentSoftBorder,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  catChipText: {
+    fontSize: 11,
+    color: colors.accent,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  cardName: { fontSize: 12, color: colors.textTertiary, fontWeight: '500' },
 
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F0F0F0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: colors.accentSoftBorder,
   },
-  avatarText: { color: '#555', fontWeight: '600', fontSize: 12 },
+  avatarText: { color: colors.accent, fontWeight: '700', fontSize: 12 },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(10, 10, 18, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -320,59 +474,50 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderRadius: 22,
     overflow: 'hidden',
+    ...shadows.cardHover,
+    shadowOpacity: 0.3,
   },
   modalImage: {
     width: '100%',
     aspectRatio: 16 / 9,
-    backgroundColor: '#fff',
-    backgroundSize: 'cover',
+    backgroundColor: colors.surfaceAlt,
     backgroundRepeat: 'no-repeat',
     backgroundPosition: 'center',
   },
-  modalBody: { padding: 18 },
+  modalBody: { padding: 20 },
   modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  modalName: { fontSize: 16, fontWeight: '700', color: '#000' },
-  modalSub: {
-    fontSize: 11,
-    color: '#999',
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  modalPrice: { fontSize: 22, fontWeight: '700', color: '#000' },
-  modalDesc: { fontSize: 14, color: '#333', lineHeight: 20, marginBottom: 14 },
+  modalName: { fontSize: 17, fontWeight: '700', color: colors.text },
+  modalPrice: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  modalDesc: { fontSize: 14, color: colors.text, lineHeight: 21, marginBottom: 8 },
 
+  detailGroup: {
+    marginTop: 12,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+  },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
+  detailRowLast: { borderBottomWidth: 0 },
   detailLabel: {
     fontSize: 11,
-    color: '#999',
+    color: colors.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
+    fontWeight: '600',
   },
-  detailValue: { fontSize: 14, color: '#000', fontWeight: '500' },
-
-  callBtn: {
-    backgroundColor: '#000',
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  callBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  closeBtn: { alignItems: 'center', paddingVertical: 12, marginTop: 4 },
-  closeBtnText: { color: '#999', fontSize: 13, fontWeight: '500' },
+  detailValue: { fontSize: 14, color: colors.text, fontWeight: '500' },
 });
