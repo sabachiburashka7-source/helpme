@@ -6,16 +6,16 @@ import {
 
 const CATEGORIES = ['Moving', 'Assembly', 'Home', 'Other'];
 
-export default function MyRequestsScreen({ myOffers, onAddOffer, onUpdateOffer }) {
+export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateOffer, onLogout }) {
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
     description: '', price: '', location: '', category: 'Moving',
   });
 
   const profile = {
-    name: 'You',
-    avatar: 'ME',
-    phone: '+1 555-9999',
+    name: user?.name || 'You',
+    avatar: (user?.name || 'ME').slice(0, 2).toUpperCase(),
+    phone: user?.phone || '',
   };
 
   async function generateImage(id, description, category) {
@@ -68,6 +68,15 @@ export default function MyRequestsScreen({ myOffers, onAddOffer, onUpdateOffer }
             <Text style={styles.statNum}>{myOffers.length}</Text>
             <Text style={styles.statLabel}>posted</Text>
           </View>
+          {onLogout ? (
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={onLogout}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.logoutText}>Sign out</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Tabs */}
@@ -222,6 +231,16 @@ const styles = StyleSheet.create({
   statBox: { alignItems: 'center' },
   statNum: { fontSize: 18, fontWeight: '700', color: '#000' },
   statLabel: { fontSize: 10, color: '#999', textTransform: 'uppercase', letterSpacing: 0.5 },
+  logoutBtn: {
+    marginLeft: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EEE',
+    backgroundColor: '#fff',
+  },
+  logoutText: { fontSize: 11, color: '#666', fontWeight: '600' },
 
   tabs: {
     flexDirection: 'row',
