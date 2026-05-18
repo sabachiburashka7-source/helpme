@@ -62,11 +62,35 @@ function imageUrlFor(offer) {
 const imageSizeFor = (offer) => (offer.image ? 'cover' : 'contain');
 
 const HEADER_HEIGHT = 64;
+const RADIUS_OPTIONS = [
+  { value: null, label: 'Any' },
+  { value: 1, label: '1 km' },
+  { value: 5, label: '5 km' },
+  { value: 10, label: '10 km' },
+  { value: 25, label: '25 km' },
+  { value: 50, label: '50 km' },
+];
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
 
 export default function BrowseScreen({ dbOffers }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [radiusKm, setRadiusKm] = useState(null);
+  const [userCoords, setUserCoords] = useState(null);
+  const [locStatus, setLocStatus] = useState('idle'); // idle | loading | granted | error
+  const [locError, setLocError] = useState('');
 
   const headerOffset = useRef(new Animated.Value(0)).current;
   const headerVisible = useRef(true);
@@ -103,15 +127,48 @@ export default function BrowseScreen({ dbOffers }) {
     lastScrollY.current = y;
   };
 
+  function pickRadius(km) {
+    setRadiusKm(km);
+    if (km == null) return;
+    if (userCoords) return;
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) {
+      setLocStatus('error');
+      setLocError('Geolocation not available');
+      setRadiusKm(null);
+      return;
+    }
+    setLocStatus('loading');
+    setLocError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocStatus('granted');
+      },
+      (err) => {
+        setLocStatus('error');
+        setLocError(err.message || 'Could not get location');
+        setRadiusKm(null);
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  }
+
   const allOffers = dbOffers.filter((o) => o.image);
   const filtered = allOffers.filter((o) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      o.description.toLowerCase().includes(q) ||
-      o.location.toLowerCase().includes(q) ||
-      o.name.toLowerCase().includes(q)
-    );
+    if (search) {
+      const q = search.toLowerCase();
+      const matches =
+        o.description.toLowerCase().includes(q) ||
+        o.location.toLowerCase().includes(q) ||
+        o.name.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    if (radiusKm != null && userCoords) {
+      if (typeof o.latitude !== 'number' || typeof o.longitude !== 'number') return false;
+      const d = haversineKm(userCoords, { lat: o.latitude, lng: o.longitude });
+      if (d > radiusKm) return false;
+    }
+    return true;
   });
 
   const headerOpacity = headerOffset.interpolate({
@@ -156,19 +213,30 @@ export default function BrowseScreen({ dbOffers }) {
           <View>
             <Text style={styles.headerTitle}>Browse</Text>
             <Text style={styles.headerSub}>
-              {filtered.length} {filtered.length === 1 ? 'request' : 'requests'} nearby
+              {filtered.length} {filtered.length === 1 ? 'request' : 'requests'}
+              {radiusKm != null && userCoords ? ` within ${radiusKm} km` : ' nearby'}
             </Text>
           </View>
           <FilterButton
             open={filterOpen}
             onPress={() => {
-              if (filterOpen) setSearch('');
+              if (filterOpen) {
+                setSearch('');
+              }
               setFilterOpen((v) => !v);
             }}
           />
         </View>
 
-        <SearchBar open={filterOpen} value={search} onChange={setSearch} />
+        <SearchBar
+          open={filterOpen}
+          value={search}
+          onChange={setSearch}
+          radiusKm={radiusKm}
+          onPickRadius={pickRadius}
+          locStatus={locStatus}
+          locError={locError}
+        />
       </Animated.View>
 
       <DetailsModal offer={selected} onClose={() => setSelected(null)} />
@@ -266,7 +334,7 @@ const glyphStyles = StyleSheet.create({
   },
 });
 
-function SearchBar({ open, value, onChange }) {
+function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, locError }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, {
@@ -281,7 +349,7 @@ function SearchBar({ open, value, onChange }) {
     <Animated.View
       style={{
         opacity: anim,
-        height: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 60] }),
+        height: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 130] }),
         overflow: 'hidden',
       }}
     >
@@ -299,6 +367,34 @@ function SearchBar({ open, value, onChange }) {
           autoFocus={open}
         />
       </View>
+      <View style={styles.radiusRow}>
+        <Text style={styles.radiusLabel}>Radius</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.radiusChips}
+        >
+          {RADIUS_OPTIONS.map((opt) => {
+            const active = radiusKm === opt.value;
+            return (
+              <Pressable
+                key={String(opt.value)}
+                onPress={() => onPickRadius(opt.value)}
+                style={[styles.radiusChip, active && styles.radiusChipActive]}
+              >
+                <Text style={[styles.radiusChipText, active && styles.radiusChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+      {locStatus === 'loading' ? (
+        <Text style={styles.radiusHint}>Getting your location…</Text>
+      ) : locStatus === 'error' ? (
+        <Text style={[styles.radiusHint, styles.radiusError]}>{locError}</Text>
+      ) : null}
     </Animated.View>
   );
 }
@@ -511,6 +607,57 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: colors.text,
+  },
+
+  radiusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  radiusLabel: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: '700',
+    marginRight: 10,
+  },
+  radiusChips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 12,
+  },
+  radiusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginRight: 6,
+  },
+  radiusChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  radiusChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  radiusChipTextActive: {
+    color: '#fff',
+  },
+  radiusHint: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+  },
+  radiusError: {
+    color: '#C0392B',
   },
 
   cardWrap: { marginBottom: 12 },

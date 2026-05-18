@@ -7,7 +7,7 @@ import { colors, radius, shadows, transitions, typography } from '../components/
 import { Button } from '../components/Button';
 import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
-import LeafletMap from '../components/LeafletMap';
+import GoogleMapPicker from '../components/GoogleMapPicker';
 
 function Field({ label, multiline, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
@@ -235,7 +235,7 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
                         <Text style={locStyles.gpsHelp}>
                           Drag the pin on the map to adjust
                         </Text>
-                        <LeafletMap
+                        <GoogleMapPicker
                           latitude={form.latitude}
                           longitude={form.longitude}
                           onChange={(lat, lng) =>
