@@ -1,29 +1,37 @@
 module.exports = async function handler(req, res) {
-  const url = process.env.SUPABASE_URL;
+  const rawUrl = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
 
-  if (!url || !key) {
+  if (!rawUrl || !key) {
+    console.log('[offers] missing env. url?', !!rawUrl, 'key?', !!key);
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  async function supabaseJson(r) {
+  // Strip trailing slash and any accidental path
+  const url = rawUrl.replace(/\/+$/, '');
+  console.log('[offers] base url:', url, 'key len:', key.length);
+
+  async function callSupabase(path, init) {
+    const fullUrl = `${url}${path}`;
+    console.log('[offers] -> fetch', init?.method || 'GET', fullUrl);
+    const r = await fetch(fullUrl, init);
     const text = await r.text();
-    console.log('[offers] supabase status:', r.status, 'body:', text.slice(0, 200));
-    try { return JSON.parse(text); } catch { return { error: text }; }
+    console.log('[offers] <- status', r.status, 'body[0..300]:', text.slice(0, 300));
+    let data;
+    try { data = JSON.parse(text); } catch { data = { error: text }; }
+    return { ok: r.ok, status: r.status, data };
   }
 
   if (req.method === 'GET') {
-    const r = await fetch(`${url}/rest/v1/offers?select=*&order=created_at.desc`, {
+    const r = await callSupabase('/rest/v1/offers?select=*&order=created_at.desc', {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
-    const data = await supabaseJson(r);
-    if (!r.ok) return res.status(r.status).json(data);
-    return res.json(data);
+    return res.status(r.ok ? 200 : r.status).json(r.data);
   }
 
   if (req.method === 'POST') {
     const { description, price, location, category, name, avatar, phone } = req.body || {};
-    const r = await fetch(`${url}/rest/v1/offers`, {
+    const r = await callSupabase('/rest/v1/offers', {
       method: 'POST',
       headers: {
         apikey: key,
@@ -33,15 +41,14 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify({ description, price, location, category, name, avatar, phone }),
     });
-    const data = await supabaseJson(r);
-    if (!r.ok) return res.status(r.status).json(data);
-    return res.status(201).json(Array.isArray(data) ? data[0] : data);
+    if (!r.ok) return res.status(r.status).json(r.data);
+    return res.status(201).json(Array.isArray(r.data) ? r.data[0] : r.data);
   }
 
   if (req.method === 'PATCH') {
     const { id, ...patch } = req.body || {};
     if (!id) return res.status(400).json({ error: 'Missing id' });
-    const r = await fetch(`${url}/rest/v1/offers?id=eq.${id}`, {
+    const r = await callSupabase(`/rest/v1/offers?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: {
         apikey: key,
@@ -50,10 +57,7 @@ module.exports = async function handler(req, res) {
       },
       body: JSON.stringify(patch),
     });
-    if (!r.ok) {
-      const data = await supabaseJson(r);
-      return res.status(r.status).json(data);
-    }
+    if (!r.ok) return res.status(r.status).json(r.data);
     return res.json({ ok: true });
   }
 
