@@ -7,6 +7,7 @@ import { colors, radius, shadows, transitions, typography } from '../components/
 import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
 import MapPicker from '../components/MapPicker';
+import { useTranslation, LanguageSwitcher } from '../components/i18n';
 
 const KEYFRAMES_ID = 'live-gradient-keyframes';
 function ensureKeyframes() {
@@ -45,6 +46,18 @@ const liveLine = Platform.OS === 'web'
       animation: 'liveGradientLine 3.5s linear infinite',
     }
   : { backgroundColor: '#0a0a0a' };
+
+function confirmDialog(title, message) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+  }
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+    ]);
+  });
+}
 
 function Field({ label, multiline, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
@@ -167,6 +180,7 @@ function OutlinePill({ title, onPress }) {
 }
 
 function LoadingState() {
+  const { t } = useTranslation();
   const pulse = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -181,14 +195,15 @@ function LoadingState() {
   return (
     <View style={styles.empty}>
       <Animated.View style={[styles.emptyDot, liveDark, { opacity: pulse }]} />
-      <Text style={styles.emptyTitle}>Loading requests…</Text>
-      <Text style={styles.emptySub}>Hang tight</Text>
+      <Text style={styles.emptyTitle}>{t('Loading requests…')}</Text>
+      <Text style={styles.emptySub}>{t('Hang tight')}</Text>
     </View>
   );
 }
 
-export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onLogout }) {
+export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout }) {
   useEffect(() => { ensureKeyframes(); }, []);
+  const { t } = useTranslation();
 
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
@@ -265,9 +280,9 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
   }
 
   async function handleSubmit() {
-    if (!form.description.trim()) return Alert.alert('Missing', 'Add a description.');
-    if (!form.price.trim()) return Alert.alert('Missing', 'Add a price.');
-    if (!form.location.trim()) return Alert.alert('Missing', 'Add a location.');
+    if (!form.description.trim()) return Alert.alert(t('Missing'), t('Add a description.'));
+    if (!form.price.trim()) return Alert.alert(t('Missing'), t('Add a price.'));
+    if (!form.location.trim()) return Alert.alert(t('Missing'), t('Add a location.'));
     const { description } = form;
     const payload = {
       description: form.description,
@@ -294,9 +309,12 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
         {/* Profile — centered, symmetric */}
         <FadeInUp>
           <View style={styles.profile}>
+            <View style={styles.langWrap}>
+              <LanguageSwitcher />
+            </View>
             {onLogout ? (
               <View style={styles.signOutWrap}>
-                <OutlinePill title="Sign out" onPress={onLogout} />
+                <OutlinePill title={t('Sign out')} onPress={onLogout} />
               </View>
             ) : null}
             <View style={[styles.avatar, liveDark]}>
@@ -312,8 +330,8 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
         {/* Tabs */}
         <LiveTabs
           tabs={[
-            { value: 'new', label: 'New request' },
-            { value: 'mine', label: 'Mine' },
+            { value: 'new', label: t('New request') },
+            { value: 'mine', label: t('Mine') },
           ]}
           value={tab}
           onChange={setTab}
@@ -327,8 +345,8 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
           >
             <FadeInUp>
               <Field
-                label="Description"
-                placeholder="What do you need help with?"
+                label={t('Description')}
+                placeholder={t('What do you need help with?')}
                 multiline
                 value={form.description}
                 onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
@@ -337,7 +355,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
             <FadeInUp delay={50}>
               <Field
-                label="Price (USD)"
+                label={t('Price (USD)')}
                 placeholder="50"
                 keyboardType="numeric"
                 value={form.price}
@@ -347,14 +365,14 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
             <FadeInUp delay={100}>
               <View style={fieldStyles.wrap}>
-                <Text style={fieldStyles.label}>Location</Text>
+                <Text style={fieldStyles.label}>{t('Location')}</Text>
                 <View style={locStyles.modeRow}>
                   <Pressable
                     onPress={() => switchMode('gps')}
                     style={[locStyles.modeBtn, locationMode === 'gps' && locStyles.modeBtnActive]}
                   >
                     <Text style={[locStyles.modeBtnText, locationMode === 'gps' && locStyles.modeBtnTextActive]}>
-                      Use my location
+                      {t('Use my location')}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -362,7 +380,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                     style={[locStyles.modeBtn, locationMode === 'manual' && locStyles.modeBtnActive]}
                   >
                     <Text style={[locStyles.modeBtnText, locationMode === 'manual' && locStyles.modeBtnTextActive]}>
-                      Type address
+                      {t('Type address')}
                     </Text>
                   </Pressable>
                 </View>
@@ -371,9 +389,9 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                   <View style={locStyles.gpsBox}>
                     {gpsStatus === 'success' && form.latitude != null ? (
                       <>
-                        <Text style={locStyles.gpsTitle}>Location pinned</Text>
+                        <Text style={locStyles.gpsTitle}>{t('Location pinned')}</Text>
                         <Text style={locStyles.gpsHelp}>
-                          Drag the pin on the map to adjust
+                          {t('Drag the pin on the map to adjust')}
                         </Text>
                         <MapPicker
                           latitude={form.latitude}
@@ -393,18 +411,18 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                             {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
                           </Text>
                           <Pressable onPress={detectLocation} style={locStyles.gpsRefresh}>
-                            <Text style={locStyles.gpsRefreshText}>Re-detect</Text>
+                            <Text style={locStyles.gpsRefreshText}>{t('Re-detect')}</Text>
                           </Pressable>
                         </View>
                       </>
                     ) : gpsStatus === 'loading' ? (
-                      <Text style={locStyles.gpsHint}>Detecting your location…</Text>
+                      <Text style={locStyles.gpsHint}>{t('Detecting your location…')}</Text>
                     ) : (
                       <View style={locStyles.gpsCenter}>
                         <Text style={locStyles.gpsHint}>
                           {gpsStatus === 'error'
-                            ? gpsError || 'Could not get location'
-                            : 'Tap detect to pin your current location on the map'}
+                            ? gpsError || t('Could not get location')
+                            : t('Tap detect to pin your current location on the map')}
                         </Text>
                         <Pressable
                           onPress={detectLocation}
@@ -415,14 +433,14 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                             Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
                           ]}
                         >
-                          <Text style={locStyles.gpsBtnText}>Detect my location</Text>
+                          <Text style={locStyles.gpsBtnText}>{t('Detect my location')}</Text>
                         </Pressable>
                       </View>
                     )}
                   </View>
                 ) : (
                   <TextInput
-                    placeholder="City, State or full address"
+                    placeholder={t('City, State or full address')}
                     placeholderTextColor={colors.textMuted}
                     value={form.location}
                     onChangeText={(v) => setForm((f) => ({ ...f, location: v, latitude: null, longitude: null }))}
@@ -437,7 +455,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
             <View style={{ height: 24 }} />
             <FadeInUp delay={150}>
-              <GradientButton title="Post request" onPress={handleSubmit} />
+              <GradientButton title={t('Post request')} onPress={handleSubmit} />
             </FadeInUp>
             <View style={{ height: 32 }} />
           </ScrollView>
@@ -453,15 +471,15 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 <FadeInUp>
                   <View style={styles.empty}>
                     <View style={[styles.emptyDot, liveDark]} />
-                    <Text style={styles.emptyTitle}>No requests yet</Text>
-                    <Text style={styles.emptySub}>Tap "New request" to post your first one</Text>
+                    <Text style={styles.emptyTitle}>{t('No requests yet')}</Text>
+                    <Text style={styles.emptySub}>{t('Tap "New request" to post your first one')}</Text>
                   </View>
                 </FadeInUp>
               )
             ) : (
               myOffers.map((offer, i) => (
                 <FadeInUp key={offer.id} delay={Math.min(i * 40, 240)}>
-                  <MyOfferCard offer={offer} />
+                  <MyOfferCard offer={offer} onRemove={onRemoveOffer} />
                 </FadeInUp>
               ))
             )}
@@ -473,7 +491,15 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
   );
 }
 
-function MyOfferCard({ offer }) {
+function MyOfferCard({ offer, onRemove }) {
+  const { t } = useTranslation();
+
+  async function handleDelete() {
+    const ok = await confirmDialog(t('Delete request?'), t('This will permanently remove this request.'));
+    if (!ok) return;
+    onRemove?.(offer.id);
+  }
+
   return (
     <View style={styles.myCard}>
       {offer.image ? (
@@ -481,11 +507,24 @@ function MyOfferCard({ offer }) {
       ) : offer.generatingImage ? (
         <View style={styles.myCardImagePlaceholder}>
           <View style={[styles.spinDot, liveDark]} />
-          <Text style={styles.myCardImagePlaceholderText}>Generating image…</Text>
+          <Text style={styles.myCardImagePlaceholderText}>{t('Generating image…')}</Text>
         </View>
       ) : null}
       <View style={styles.myCardTop}>
         <Text style={styles.myCardPrice}>${offer.price}</Text>
+        {onRemove ? (
+          <Pressable
+            onPress={handleDelete}
+            style={({ hovered }) => [
+              styles.deleteBtn,
+              hovered && styles.deleteBtnHover,
+              Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+            ]}
+          >
+            <DeleteGlyph />
+            <Text style={styles.deleteBtnText}>{t('Delete')}</Text>
+          </Pressable>
+        ) : null}
       </View>
       <Text style={styles.myCardDesc}>{offer.description}</Text>
       <View style={styles.myCardFooter}>
@@ -494,6 +533,10 @@ function MyOfferCard({ offer }) {
       </View>
     </View>
   );
+}
+
+function DeleteGlyph() {
+  return <Text style={glyphStyles.icon}>✕</Text>;
 }
 
 const styles = StyleSheet.create({
@@ -510,6 +553,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 18,
     right: 20,
+  },
+  langWrap: {
+    position: 'absolute',
+    top: 18,
+    left: 20,
   },
   avatar: {
     width: 64,
@@ -589,6 +637,37 @@ const styles = StyleSheet.create({
   myCardFooter: { flexDirection: 'row', alignItems: 'center' },
   myCardLocIcon: { fontSize: 11, marginRight: 4 },
   myCardLoc: { fontSize: 12, color: colors.textSecondary },
+
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  deleteBtnHover: {
+    borderColor: '#0a0a0a',
+    backgroundColor: colors.surfaceAlt,
+  },
+  deleteBtnText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    marginLeft: 6,
+  },
+});
+
+const glyphStyles = StyleSheet.create({
+  icon: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    lineHeight: 11,
+  },
 });
 
 const tabStyles = StyleSheet.create({

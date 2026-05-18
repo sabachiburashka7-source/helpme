@@ -6,6 +6,7 @@ import BrowseScreen from './screens/BrowseScreen';
 import MyRequestsScreen from './screens/MyRequestsScreen';
 import AuthScreen from './screens/AuthScreen';
 import { colors, radius } from './components/theme';
+import { I18nProvider, useTranslation } from './components/i18n';
 
 const Tab = createBottomTabNavigator();
 const STORAGE_KEY = 'helpme.user';
@@ -30,6 +31,14 @@ function persistUser(user) {
 }
 
 export default function App() {
+  return (
+    <I18nProvider>
+      <AppInner />
+    </I18nProvider>
+  );
+}
+
+function AppInner() {
   const [user, setUser] = useState(() => loadStoredUser());
   const [dbOffers, setDbOffers] = useState([]);
   const [myOffers, setMyOffers] = useState([]);
@@ -95,6 +104,18 @@ export default function App() {
     } catch {}
 
     return tempId;
+  }
+
+  async function removeOffer(id) {
+    setMyOffers((prev) => prev.filter((o) => o.id !== id));
+    setDbOffers((prev) => prev.filter((o) => o.id !== id));
+    try {
+      await fetch('/api/offers', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+    } catch {}
   }
 
   function updateOffer(id, patch) {
@@ -164,6 +185,7 @@ export default function App() {
               loading={offersLoading}
               onAddOffer={addOffer}
               onUpdateOffer={updateOffer}
+              onRemoveOffer={removeOffer}
               onLogout={handleLogout}
             />
           )}

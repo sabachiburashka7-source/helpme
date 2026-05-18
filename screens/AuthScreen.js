@@ -7,6 +7,7 @@ import { colors, radius, spacing, typography, transitions } from '../components/
 import { Button } from '../components/Button';
 import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
+import { useTranslation, LanguageSwitcher } from '../components/i18n';
 
 function Field({ label, focused, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
@@ -35,6 +36,7 @@ function Field({ label, focused, ...inputProps }) {
 }
 
 export default function AuthScreen({ onAuthenticated }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState('login');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -59,9 +61,9 @@ export default function AuthScreen({ onAuthenticated }) {
 
   async function submit() {
     setError('');
-    if (!phone.trim()) return flashError('Enter your phone number');
-    if (!password) return flashError('Enter your password');
-    if (isRegister && !name.trim()) return flashError('Enter your name');
+    if (!phone.trim()) return flashError(t('Enter your phone number'));
+    if (!password) return flashError(t('Enter your password'));
+    if (isRegister && !name.trim()) return flashError(t('Enter your name'));
 
     setBusy(true);
     try {
@@ -77,13 +79,13 @@ export default function AuthScreen({ onAuthenticated }) {
       });
       const data = await r.json();
       if (!r.ok) {
-        flashError(data?.error || 'Something went wrong');
+        flashError(data?.error || t('Something went wrong'));
         setBusy(false);
         return;
       }
       onAuthenticated(data);
     } catch {
-      flashError('Network error. Try again.');
+      flashError(t('Network error. Try again.'));
       setBusy(false);
     }
   }
@@ -103,14 +105,17 @@ export default function AuthScreen({ onAuthenticated }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.langRow}>
+          <LanguageSwitcher size="md" />
+        </View>
         <FadeInUp>
           <View style={styles.header}>
             <View style={styles.logoDot} />
             <Text style={styles.brand}>helpme</Text>
             <Text style={styles.tagline}>
               {isRegister
-                ? 'Create your account in seconds'
-                : 'Welcome back — sign in to continue'}
+                ? t('Create your account in seconds')
+                : t('Welcome back — sign in to continue')}
             </Text>
           </View>
         </FadeInUp>
@@ -119,8 +124,8 @@ export default function AuthScreen({ onAuthenticated }) {
           <View style={styles.tabsWrap}>
             <SegmentedTabs
               tabs={[
-                { value: 'login', label: 'Sign In' },
-                { value: 'register', label: 'Register' },
+                { value: 'login', label: t('Sign In') },
+                { value: 'register', label: t('Register') },
               ]}
               value={mode}
               onChange={switchMode}
@@ -132,8 +137,8 @@ export default function AuthScreen({ onAuthenticated }) {
           <View style={styles.form}>
             {isRegister && (
               <Field
-                label="Name"
-                placeholder="Your name"
+                label={t('Name')}
+                placeholder={t('Your name')}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -141,7 +146,7 @@ export default function AuthScreen({ onAuthenticated }) {
             )}
 
             <Field
-              label="Phone"
+              label={t('Phone')}
               placeholder="+1 555-1234"
               value={phone}
               onChangeText={setPhone}
@@ -151,8 +156,8 @@ export default function AuthScreen({ onAuthenticated }) {
             />
 
             <Field
-              label="Password"
-              placeholder="Min. 4 characters"
+              label={t('Password')}
+              placeholder={t('Min. 4 characters')}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -184,7 +189,7 @@ export default function AuthScreen({ onAuthenticated }) {
 
             <View style={{ height: 24 }} />
             <Button
-              title={isRegister ? 'Create account' : 'Sign in'}
+              title={isRegister ? t('Create account') : t('Sign in')}
               onPress={submit}
               loading={busy}
               size="lg"
@@ -199,9 +204,9 @@ export default function AuthScreen({ onAuthenticated }) {
               ]}
             >
               <Text style={styles.switchText}>
-                {isRegister ? 'Already have an account? ' : 'New here? '}
+                {isRegister ? t('Already have an account? ') : t('New here? ')}
                 <Text style={styles.switchTextStrong}>
-                  {isRegister ? 'Sign in' : 'Create one'}
+                  {isRegister ? t('Sign in') : t('Create one')}
                 </Text>
               </Text>
             </Pressable>
@@ -216,8 +221,12 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     paddingHorizontal: 28,
-    paddingTop: 80,
+    paddingTop: 24,
     paddingBottom: 40,
+  },
+  langRow: {
+    alignItems: 'flex-end',
+    marginBottom: 24,
   },
   header: { marginBottom: 32 },
   logoDot: {

@@ -6,6 +6,7 @@ import {
 import { colors, radius, shadows, transitions, typography } from '../components/theme';
 import { Button, PressableScale } from '../components/Button';
 import FadeInUp from '../components/FadeInUp';
+import { useTranslation } from '../components/i18n';
 
 const SVG_BY_CATEGORY = {
   Moving: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
@@ -62,8 +63,8 @@ function imageUrlFor(offer) {
 const imageSizeFor = (offer) => (offer.image ? 'cover' : 'contain');
 
 const HEADER_HEIGHT = 64;
-const RADIUS_OPTIONS = [
-  { value: null, label: 'Any' },
+const buildRadiusOptions = (t) => [
+  { value: null, label: t('Any') },
   { value: 1, label: '1 km' },
   { value: 5, label: '5 km' },
   { value: 10, label: '10 km' },
@@ -84,6 +85,7 @@ function haversineKm(a, b) {
 }
 
 export default function BrowseScreen({ dbOffers, loading }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -133,7 +135,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
     if (userCoords) return;
     if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) {
       setLocStatus('error');
-      setLocError('Geolocation not available');
+      setLocError(t('Geolocation not available'));
       setRadiusKm(null);
       return;
     }
@@ -146,7 +148,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
       },
       (err) => {
         setLocStatus('error');
-        setLocError(err.message || 'Could not get location');
+        setLocError(err.message || t('Could not get location'));
         setRadiusKm(null);
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
@@ -190,8 +192,8 @@ export default function BrowseScreen({ dbOffers, loading }) {
           ) : (
             <View style={styles.empty}>
               <View style={styles.emptyDot} />
-              <Text style={styles.emptyTitle}>No matches</Text>
-              <Text style={styles.emptySub}>Try a different search</Text>
+              <Text style={styles.emptyTitle}>{t('No matches')}</Text>
+              <Text style={styles.emptySub}>{t('Try a different search')}</Text>
             </View>
           )
         )}
@@ -215,10 +217,10 @@ export default function BrowseScreen({ dbOffers, loading }) {
       >
         <View style={styles.headerBar}>
           <View>
-            <Text style={styles.headerTitle}>Browse</Text>
+            <Text style={styles.headerTitle}>{t('Browse')}</Text>
             <Text style={styles.headerSub}>
-              {filtered.length} {filtered.length === 1 ? 'request' : 'requests'}
-              {radiusKm != null && userCoords ? ` within ${radiusKm} km` : ' nearby'}
+              {filtered.length} {filtered.length === 1 ? t('request') : t('requests')}
+              {radiusKm != null && userCoords ? ` · ${t('within')} ${radiusKm} km` : ` · ${t('nearby')}`}
             </Text>
           </View>
           <FilterButton
@@ -240,6 +242,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
           onPickRadius={pickRadius}
           locStatus={locStatus}
           locError={locError}
+          t={t}
         />
       </Animated.View>
 
@@ -249,6 +252,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
 }
 
 function LoadingState() {
+  const { t } = useTranslation();
   const pulse = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -263,8 +267,8 @@ function LoadingState() {
   return (
     <View style={styles.empty}>
       <Animated.View style={[styles.emptyDot, { opacity: pulse }]} />
-      <Text style={styles.emptyTitle}>Loading requests…</Text>
-      <Text style={styles.emptySub}>Hang tight</Text>
+      <Text style={styles.emptyTitle}>{t('Loading requests…')}</Text>
+      <Text style={styles.emptySub}>{t('Hang tight')}</Text>
     </View>
   );
 }
@@ -359,7 +363,8 @@ const glyphStyles = StyleSheet.create({
   },
 });
 
-function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, locError }) {
+function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, locError, t }) {
+  const RADIUS_OPTIONS = buildRadiusOptions(t);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(anim, {
@@ -385,7 +390,7 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
             styles.search,
             Platform.OS === 'web' && { outlineStyle: 'none', transition: transitions.base },
           ]}
-          placeholder="Search requests…"
+          placeholder={t('Search requests…')}
           placeholderTextColor={colors.textTertiary}
           value={value}
           onChangeText={onChange}
@@ -393,7 +398,7 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
         />
       </View>
       <View style={styles.radiusRow}>
-        <Text style={styles.radiusLabel}>Radius</Text>
+        <Text style={styles.radiusLabel}>{t('Radius')}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -416,7 +421,7 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
         </ScrollView>
       </View>
       {locStatus === 'loading' ? (
-        <Text style={styles.radiusHint}>Getting your location…</Text>
+        <Text style={styles.radiusHint}>{t('Getting your location…')}</Text>
       ) : locStatus === 'error' ? (
         <Text style={[styles.radiusHint, styles.radiusError]}>{locError}</Text>
       ) : null}
@@ -425,6 +430,7 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
 }
 
 function OfferCard({ offer, onPress }) {
+  const { t } = useTranslation();
   return (
     <PressableScale onPress={onPress} hoverLift style={styles.cardWrap}>
       <View style={styles.card}>
@@ -437,7 +443,7 @@ function OfferCard({ offer, onPress }) {
           {offer.generatingImage && !offer.image ? (
             <View style={styles.imageLoadingBadge}>
               <View style={styles.spinDot} />
-              <Text style={styles.imageLoadingText}>Generating image…</Text>
+              <Text style={styles.imageLoadingText}>{t('Generating image…')}</Text>
             </View>
           ) : null}
           <View style={styles.cardPriceTag}>
@@ -456,7 +462,7 @@ function OfferCard({ offer, onPress }) {
   );
 }
 
-function OfferMap({ offer }) {
+function OfferMap({ offer, t }) {
   if (Platform.OS !== 'web') return null;
   const hasCoords = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
   const query = hasCoords
@@ -480,13 +486,14 @@ function OfferMap({ offer }) {
         })}
       </View>
       <Pressable onPress={() => Linking.openURL(linkHref)} style={styles.mapOpenBtn}>
-        <Text style={styles.mapOpenText}>Open in Google Maps ↗</Text>
+        <Text style={styles.mapOpenText}>{t('Open in Google Maps ↗')}</Text>
       </Pressable>
     </View>
   );
 }
 
 function DetailsModal({ offer, onClose }) {
+  const { t } = useTranslation();
   const open = !!offer;
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.94)).current;
@@ -542,23 +549,23 @@ function DetailsModal({ offer, onClose }) {
 
             <Text style={styles.modalDesc}>{data.description}</Text>
 
-            <OfferMap offer={data} />
+            <OfferMap offer={data} t={t} />
 
             <View style={styles.detailGroup}>
               <View style={[styles.detailRow, styles.detailRowLast]}>
-                <Text style={styles.detailLabel}>Number</Text>
+                <Text style={styles.detailLabel}>{t('Number')}</Text>
                 <Text style={styles.detailValue}>{data.phone}</Text>
               </View>
             </View>
 
             <View style={{ height: 16 }} />
             <Button
-              title="Call now"
+              title={t('Call now')}
               size="lg"
               onPress={() => Linking.openURL(`tel:${data.phone}`)}
             />
             <View style={{ height: 4 }} />
-            <Button title="Close" variant="ghost" size="md" onPress={onClose} />
+            <Button title={t('Close')} variant="ghost" size="md" onPress={onClose} />
           </View>
         </Animated.View>
       </Animated.View>

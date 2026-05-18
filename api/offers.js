@@ -51,6 +51,20 @@ module.exports = async function handler(req, res) {
     return res.status(201).json(Array.isArray(r.data) ? r.data[0] : r.data);
   }
 
+  if (req.method === 'DELETE') {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'Missing id' });
+    const r = await callSupabase(`/rest/v1/offers?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+    });
+    if (!r.ok) return res.status(r.status).json(r.data);
+    return res.json({ ok: true });
+  }
+
   if (req.method === 'PATCH') {
     const { id, ...patch } = req.body || {};
     if (!id) return res.status(400).json({ error: 'Missing id' });
