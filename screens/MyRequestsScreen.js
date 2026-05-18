@@ -91,10 +91,12 @@ function Field({ label, multiline, ...inputProps }) {
 }
 
 function LiveTabs({ tabs, value, onChange }) {
-  const [width, setWidth] = useState(0);
+  const [innerW, setInnerW] = useState(0);
   const tx = useRef(new Animated.Value(0)).current;
   const index = Math.max(0, tabs.findIndex((t) => t.value === value));
-  const segmentW = width > 0 ? width / tabs.length : 0;
+  const segmentW = innerW > 0 ? innerW / tabs.length : 0;
+  const thumbInset = 24;
+  const thumbW = Math.max(0, segmentW - thumbInset);
 
   useEffect(() => {
     if (segmentW === 0) return;
@@ -107,35 +109,41 @@ function LiveTabs({ tabs, value, onChange }) {
   }, [index, segmentW, tx]);
 
   return (
-    <View style={tabStyles.wrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <View style={tabStyles.row}>
-        {tabs.map((t) => {
-          const active = t.value === value;
-          return (
-            <Pressable
-              key={t.value}
-              onPress={() => onChange(t.value)}
-              style={({ hovered }) => [
-                tabStyles.tab,
-                Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
-                hovered && !active && tabStyles.tabHover,
+    <View style={tabStyles.wrap}>
+      <View style={tabStyles.inner} onLayout={(e) => setInnerW(e.nativeEvent.layout.width)}>
+        <View style={tabStyles.row}>
+          {tabs.map((t) => {
+            const active = t.value === value;
+            return (
+              <Pressable
+                key={t.value}
+                onPress={() => onChange(t.value)}
+                style={({ hovered }) => [
+                  tabStyles.tab,
+                  Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                  hovered && !active && tabStyles.tabHover,
+                ]}
+              >
+                <Text style={[tabStyles.text, active && tabStyles.textActive]}>{t.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={tabStyles.track}>
+          {segmentW > 0 ? (
+            <Animated.View
+              style={[
+                tabStyles.thumb,
+                liveLine,
+                {
+                  width: thumbW,
+                  transform: [{ translateX: tx }],
+                  marginLeft: thumbInset / 2,
+                },
               ]}
-            >
-              <Text style={[tabStyles.text, active && tabStyles.textActive]}>{t.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={tabStyles.track}>
-        {segmentW > 0 ? (
-          <Animated.View
-            style={[
-              tabStyles.thumb,
-              liveLine,
-              { width: segmentW - 24, transform: [{ translateX: tx }], marginLeft: 12 },
-            ]}
-          />
-        ) : null}
+            />
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -411,48 +419,50 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
             <FadeInUp delay={40}>
               <View style={fieldStyles.wrap}>
                 <Text style={fieldStyles.label}>{t('Photos (optional)')}</Text>
-                <View style={photoStyles.row}>
-                  {(form.images || []).map((src, i) => (
-                    <View key={i} style={photoStyles.thumbWrap}>
-                      <View
-                        style={[
-                          photoStyles.thumb,
-                          Platform.OS === 'web'
-                            ? {
-                                backgroundImage: `url("${src}")`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                              }
-                            : null,
-                        ]}
-                      />
-                      <Pressable
-                        onPress={() => removeOfferImage(i)}
-                        style={({ hovered }) => [
-                          photoStyles.removeBtn,
-                          hovered && photoStyles.removeBtnHover,
-                          Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
-                        ]}
-                        accessibilityLabel={t('Remove photo')}
-                      >
-                        <Text style={photoStyles.removeBtnText}>✕</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                  {(form.images || []).length < MAX_OFFER_IMAGES ? (
-                    <Pressable
-                      onPress={handlePickOfferImages}
-                      style={({ hovered }) => [
-                        photoStyles.addBtn,
-                        hovered && photoStyles.addBtnHover,
-                        Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
-                      ]}
-                    >
-                      <Text style={photoStyles.addBtnPlus}>+</Text>
-                      <Text style={photoStyles.addBtnText}>{t('Add photos')}</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
+                {(form.images || []).length > 0 ? (
+                  <View style={photoStyles.thumbRow}>
+                    {(form.images || []).map((src, i) => (
+                      <View key={i} style={photoStyles.thumbWrap}>
+                        <View
+                          style={[
+                            photoStyles.thumb,
+                            Platform.OS === 'web'
+                              ? {
+                                  backgroundImage: `url("${src}")`,
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: 'center',
+                                }
+                              : null,
+                          ]}
+                        />
+                        <Pressable
+                          onPress={() => removeOfferImage(i)}
+                          style={({ hovered }) => [
+                            photoStyles.removeBtn,
+                            hovered && photoStyles.removeBtnHover,
+                            Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                          ]}
+                          accessibilityLabel={t('Remove photo')}
+                        >
+                          <Text style={photoStyles.removeBtnText}>✕</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {(form.images || []).length < MAX_OFFER_IMAGES ? (
+                  <Pressable
+                    onPress={handlePickOfferImages}
+                    style={({ hovered }) => [
+                      photoStyles.addBtn,
+                      hovered && photoStyles.addBtnHover,
+                      Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                    ]}
+                  >
+                    <Text style={photoStyles.addBtnPlus}>+</Text>
+                    <Text style={photoStyles.addBtnText}>{t('Add photos')}</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </FadeInUp>
 
@@ -818,6 +828,9 @@ const tabStyles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 4,
   },
+  inner: {
+    alignSelf: 'stretch',
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -914,10 +927,11 @@ const fieldStyles = StyleSheet.create({
 });
 
 const photoStyles = StyleSheet.create({
-  row: {
+  thumbRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    marginBottom: 8,
   },
   thumbWrap: {
     width: 72,
@@ -955,34 +969,35 @@ const photoStyles = StyleSheet.create({
     lineHeight: 11,
   },
   addBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    backgroundColor: colors.surface,
+    alignSelf: 'stretch',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 46,
   },
   addBtnHover: {
     borderColor: colors.accent,
     backgroundColor: colors.accentSoft,
   },
   addBtnPlus: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '300',
     color: colors.textSecondary,
-    lineHeight: 24,
+    lineHeight: 20,
+    marginRight: 8,
   },
   addBtnText: {
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.textTertiary,
-    textAlign: 'center',
+    color: colors.textSecondary,
     letterSpacing: 0.2,
-    marginTop: 2,
   },
 });
 

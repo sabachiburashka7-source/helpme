@@ -9,6 +9,31 @@ import FadeInUp from '../components/FadeInUp';
 import { useTranslation } from '../components/i18n';
 import { isImageUrl } from '../components/profileImage';
 
+const KEYFRAMES_ID = 'live-gradient-keyframes-browse';
+function ensureKeyframes() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  if (document.getElementById(KEYFRAMES_ID)) return;
+  const tag = document.createElement('style');
+  tag.id = KEYFRAMES_ID;
+  tag.textContent = `
+    @keyframes liveGradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+  `;
+  document.head.appendChild(tag);
+}
+
+const liveDark = Platform.OS === 'web'
+  ? {
+      backgroundImage:
+        'linear-gradient(120deg, #2A040F 0%, #5A0E25 25%, #9C2A4C 50%, #5A0E25 75%, #2A040F 100%)',
+      backgroundSize: '300% 300%',
+      animation: 'liveGradient 8s ease-in-out infinite',
+    }
+  : { backgroundColor: '#7A1230' };
+
 const SVG_BY_CATEGORY = {
   Moving: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
@@ -86,6 +111,7 @@ function haversineKm(a, b) {
 }
 
 export default function BrowseScreen({ dbOffers, loading }) {
+  useEffect(() => { ensureKeyframes(); }, []);
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -464,6 +490,23 @@ function OfferCard({ offer, onPress }) {
 }
 
 function OfferMap({ offer, t }) {
+  const [unfolded, setUnfolded] = useState(false);
+  const [coverGone, setCoverGone] = useState(false);
+  const reveal = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (unfolded) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [unfolded, shimmer]);
+
   if (Platform.OS !== 'web') return null;
   const hasCoords = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
   const query = hasCoords
@@ -474,17 +517,114 @@ function OfferMap({ offer, t }) {
   const linkHref = hasCoords
     ? `https://www.google.com/maps/search/?api=1&query=${offer.latitude},${offer.longitude}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+
+  function unfoldCover() {
+    if (unfolded) return;
+    setUnfolded(true);
+    Animated.timing(reveal, {
+      toValue: 1,
+      duration: 900,
+      easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+      useNativeDriver: true,
+    }).start(() => setCoverGone(true));
+  }
+
+  const topHalfStyle = {
+    opacity: reveal.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 0.6, 0] }),
+    transform: [
+      { perspective: 900 },
+      { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [0, -28] }) },
+      { rotateX: reveal.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-92deg'] }) },
+    ],
+  };
+  const bottomHalfStyle = {
+    opacity: reveal.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 0.6, 0] }),
+    transform: [
+      { perspective: 900 },
+      { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [0, 28] }) },
+      { rotateX: reveal.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '92deg'] }) },
+    ],
+  };
+  const buttonOpacity = reveal.interpolate({ inputRange: [0, 0.25, 1], outputRange: [1, 0, 0] });
+  const mapScale = reveal.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] });
+  const mapOpacity = reveal.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.6, 1] });
+  const shimmerTx = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-30, 30] });
+
   return (
     <View style={styles.mapWrap}>
       <View style={styles.mapFrame}>
-        {React.createElement('iframe', {
-          src,
-          loading: 'lazy',
-          referrerPolicy: 'no-referrer-when-downgrade',
-          allowFullScreen: true,
-          style: { border: 0, width: '100%', height: '100%', display: 'block' },
-          title: 'Offer location',
-        })}
+        <Animated.View
+          style={{
+            width: '100%',
+            height: '100%',
+            opacity: mapOpacity,
+            transform: [{ scale: mapScale }],
+          }}
+        >
+          {React.createElement('iframe', {
+            src,
+            loading: 'lazy',
+            referrerPolicy: 'no-referrer-when-downgrade',
+            allowFullScreen: true,
+            style: { border: 0, width: '100%', height: '100%', display: 'block' },
+            title: 'Offer location',
+          })}
+        </Animated.View>
+
+        {!coverGone ? (
+          <View pointerEvents={unfolded ? 'none' : 'auto'} style={styles.mapCoverWrap}>
+            <Animated.View
+              style={[
+                styles.mapCoverHalf,
+                styles.mapCoverTop,
+                liveDark,
+                topHalfStyle,
+                Platform.OS === 'web' ? { transformOrigin: 'top center', backfaceVisibility: 'hidden' } : null,
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.mapCoverShine,
+                  { transform: [{ translateX: shimmerTx }] },
+                ]}
+              />
+            </Animated.View>
+            <Animated.View
+              style={[
+                styles.mapCoverHalf,
+                styles.mapCoverBottom,
+                liveDark,
+                bottomHalfStyle,
+                Platform.OS === 'web' ? { transformOrigin: 'bottom center', backfaceVisibility: 'hidden' } : null,
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.mapCoverShine,
+                  styles.mapCoverShineBottom,
+                  { transform: [{ translateX: shimmerTx }] },
+                ]}
+              />
+            </Animated.View>
+
+            <Animated.View style={[styles.mapCoverContent, { opacity: buttonOpacity }]} pointerEvents="box-none">
+              <View style={styles.mapCoverPinRow}>
+                <Text style={styles.mapCoverPin}>📍</Text>
+                <Text style={styles.mapCoverLabel}>{t('Location hidden')}</Text>
+              </View>
+              <Pressable
+                onPress={unfoldCover}
+                style={({ hovered }) => [
+                  styles.mapUnfoldBtn,
+                  hovered && styles.mapUnfoldBtnHover,
+                  Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                ]}
+              >
+                <Text style={styles.mapUnfoldBtnText}>{t('Unfold location')}</Text>
+              </Pressable>
+            </Animated.View>
+          </View>
+        ) : null}
       </View>
       <Pressable onPress={() => Linking.openURL(linkHref)} style={styles.mapOpenBtn}>
         <Text style={styles.mapOpenText}>{t('Open in Google Maps ↗')}</Text>
@@ -856,6 +996,79 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
+    position: 'relative',
+  },
+  mapCoverWrap: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapCoverHalf: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: '50%',
+    overflow: 'hidden',
+  },
+  mapCoverTop: {
+    top: 0,
+  },
+  mapCoverBottom: {
+    bottom: 0,
+  },
+  mapCoverShine: {
+    position: 'absolute',
+    top: 0,
+    left: '-30%',
+    width: '60%',
+    height: '100%',
+    backgroundImage: Platform.OS === 'web'
+      ? 'linear-gradient(110deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 100%)'
+      : undefined,
+    transform: [{ skewX: '-18deg' }],
+  },
+  mapCoverShineBottom: {
+    backgroundImage: Platform.OS === 'web'
+      ? 'linear-gradient(110deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0) 100%)'
+      : undefined,
+  },
+  mapCoverContent: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  mapCoverPinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  mapCoverPin: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  mapCoverLabel: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+  },
+  mapUnfoldBtn: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.45)',
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backdropFilter: Platform.OS === 'web' ? 'blur(6px)' : undefined,
+  },
+  mapUnfoldBtnHover: {
+    backgroundColor: 'rgba(255,255,255,0.26)',
+    borderColor: 'rgba(255,255,255,0.7)',
+  },
+  mapUnfoldBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   mapOpenBtn: {
     alignSelf: 'flex-end',
