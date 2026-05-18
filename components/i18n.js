@@ -94,6 +94,9 @@ const dict = {
     'Delete request?': 'Удалить запрос?',
     'This will permanently remove this request.': 'Запрос будет удалён без возможности восстановления.',
     'Language': 'Язык',
+    'Photos (optional)': 'Фото (необязательно)',
+    'Add photos': 'Добавить фото',
+    'Remove photo': 'Удалить фото',
   },
   ka: {
     // common
@@ -176,6 +179,9 @@ const dict = {
     'Delete request?': 'მოთხოვნის წაშლა?',
     'This will permanently remove this request.': 'მოთხოვნა სამუდამოდ წაიშლება.',
     'Language': 'ენა',
+    'Photos (optional)': 'ფოტოები (არასავალდებულო)',
+    'Add photos': 'ფოტოს დამატება',
+    'Remove photo': 'ფოტოს წაშლა',
   },
 };
 

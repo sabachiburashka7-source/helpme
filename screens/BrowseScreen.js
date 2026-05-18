@@ -574,6 +574,26 @@ function DetailsModal({ offer, onClose }) {
               </View>
             </View>
 
+            {Array.isArray(data.images) && data.images.length > 0 ? (
+              <View style={styles.photoGrid}>
+                {data.images.map((src, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.photoTile,
+                      Platform.OS === 'web'
+                        ? {
+                            backgroundImage: `url("${src}")`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                          }
+                        : null,
+                    ]}
+                  />
+                ))}
+              </View>
+            ) : null}
+
             <View style={{ height: 16 }} />
             <Button
               title={t('Call now')}
@@ -864,6 +884,20 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   detailRowLast: { borderBottomWidth: 0 },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  photoTile: {
+    width: '32%',
+    aspectRatio: 1,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   detailLabel: {
     fontSize: 11,
     color: colors.textTertiary,

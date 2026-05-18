@@ -105,6 +105,7 @@ function AppInner() {
       avatar: (user.name || '?').slice(0, 2).toUpperCase(),
       profile_image: user.profile_image || null,
       phone: user.phone,
+      images: Array.isArray(offer.images) ? offer.images : [],
     };
     delete offerData.generatingImage;
 

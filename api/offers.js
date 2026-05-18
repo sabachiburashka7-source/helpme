@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { description, price, location, category, name, avatar, phone, latitude, longitude, profile_image } = req.body || {};
+    const { description, price, location, category, name, avatar, phone, latitude, longitude, profile_image, images } = req.body || {};
     const payload = { description, price, location, category, name, avatar, phone };
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       payload.latitude = latitude;
@@ -39,6 +39,9 @@ module.exports = async function handler(req, res) {
     }
     if (typeof profile_image === 'string' && profile_image) {
       payload.profile_image = profile_image;
+    }
+    if (Array.isArray(images) && images.length > 0) {
+      payload.images = images;
     }
     const r = await callSupabase('/rest/v1/offers', {
       method: 'POST',
