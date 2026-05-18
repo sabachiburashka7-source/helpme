@@ -31,7 +31,12 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const { description, price, location, category, name, avatar, phone } = req.body || {};
+    const { description, price, location, category, name, avatar, phone, latitude, longitude } = req.body || {};
+    const payload = { description, price, location, category, name, avatar, phone };
+    if (typeof latitude === 'number' && typeof longitude === 'number') {
+      payload.latitude = latitude;
+      payload.longitude = longitude;
+    }
     const r = await callSupabase('/rest/v1/offers', {
       method: 'POST',
       headers: {
@@ -40,7 +45,7 @@ module.exports = async function handler(req, res) {
         'Content-Type': 'application/json',
         Prefer: 'return=representation',
       },
-      body: JSON.stringify({ description, price, location, category, name, avatar, phone }),
+      body: JSON.stringify(payload),
     });
     if (!r.ok) return res.status(r.status).json(r.data);
     return res.status(201).json(Array.isArray(r.data) ? r.data[0] : r.data);

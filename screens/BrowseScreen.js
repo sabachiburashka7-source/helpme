@@ -335,6 +335,36 @@ function OfferCard({ offer, onPress }) {
   );
 }
 
+function OfferMap({ offer }) {
+  if (Platform.OS !== 'web') return null;
+  const hasCoords = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
+  const query = hasCoords
+    ? `${offer.latitude},${offer.longitude}`
+    : (offer.location || '').trim();
+  if (!query) return null;
+  const src = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=15&output=embed`;
+  const linkHref = hasCoords
+    ? `https://www.google.com/maps/search/?api=1&query=${offer.latitude},${offer.longitude}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return (
+    <View style={styles.mapWrap}>
+      <View style={styles.mapFrame}>
+        {React.createElement('iframe', {
+          src,
+          loading: 'lazy',
+          referrerPolicy: 'no-referrer-when-downgrade',
+          allowFullScreen: true,
+          style: { border: 0, width: '100%', height: '100%', display: 'block' },
+          title: 'Offer location',
+        })}
+      </View>
+      <Pressable onPress={() => Linking.openURL(linkHref)} style={styles.mapOpenBtn}>
+        <Text style={styles.mapOpenText}>Open in Google Maps ↗</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function DetailsModal({ offer, onClose }) {
   const open = !!offer;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -390,6 +420,8 @@ function DetailsModal({ offer, onClose }) {
             </View>
 
             <Text style={styles.modalDesc}>{data.description}</Text>
+
+            <OfferMap offer={data} />
 
             <View style={styles.detailGroup}>
               <View style={[styles.detailRow, styles.detailRowLast]}>
@@ -590,6 +622,30 @@ const styles = StyleSheet.create({
   modalSub: { fontSize: 12, color: colors.textTertiary, marginTop: 3 },
   modalPrice: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
   modalDesc: { fontSize: 14, color: colors.text, lineHeight: 21, marginBottom: 8 },
+
+  mapWrap: {
+    marginTop: 12,
+  },
+  mapFrame: {
+    width: '100%',
+    height: 180,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  mapOpenBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  mapOpenText: {
+    fontSize: 12,
+    color: colors.accent,
+    fontWeight: '600',
+  },
 
   detailGroup: {
     marginTop: 12,

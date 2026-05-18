@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TextInput,
+  View, Text, ScrollView, TextInput, Pressable,
   StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { colors, radius, shadows, transitions, typography } from '../components/theme';
@@ -39,8 +39,53 @@ function Field({ label, multiline, ...inputProps }) {
 export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateOffer, onLogout }) {
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
-    description: '', price: '', location: '',
+    description: '', price: '', location: '', latitude: null, longitude: null,
   });
+  const [locationMode, setLocationMode] = useState('manual'); // 'manual' | 'gps'
+  const [gpsStatus, setGpsStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
+  const [gpsError, setGpsError] = useState('');
+
+  function resetForm() {
+    setForm({ description: '', price: '', location: '', latitude: null, longitude: null });
+    setLocationMode('manual');
+    setGpsStatus('idle');
+    setGpsError('');
+  }
+
+  function detectLocation() {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) {
+      setGpsStatus('error');
+      setGpsError('Geolocation is not available on this device');
+      return;
+    }
+    setGpsStatus('loading');
+    setGpsError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setForm((f) => ({
+          ...f,
+          latitude: lat,
+          longitude: lng,
+          location: `Pinned location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+        }));
+        setGpsStatus('success');
+      },
+      (err) => {
+        setGpsStatus('error');
+        setGpsError(err.message || 'Could not get location');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  function switchMode(mode) {
+    setLocationMode(mode);
+    setGpsStatus('idle');
+    setGpsError('');
+    setForm((f) => ({ ...f, location: '', latitude: null, longitude: null }));
+  }
 
   const profile = {
     name: user?.name || 'You',
@@ -71,13 +116,17 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
     if (!form.price.trim()) return Alert.alert('Missing', 'Add a price.');
     if (!form.location.trim()) return Alert.alert('Missing', 'Add a location.');
     const { description } = form;
-    setForm({ description: '', price: '', location: '' });
-    setTab('mine');
-    const id = await onAddOffer({
-      ...form,
+    const payload = {
+      description: form.description,
       price: Number(form.price),
+      location: form.location,
+      latitude: form.latitude,
+      longitude: form.longitude,
       category: 'Other',
-    });
+    };
+    resetForm();
+    setTab('mine');
+    const id = await onAddOffer(payload);
     if (id && onUpdateOffer) {
       generateImage(id, description, 'Other');
     }
@@ -156,12 +205,67 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
             </FadeInUp>
 
             <FadeInUp delay={100}>
-              <Field
-                label="Location"
-                placeholder="City, State"
-                value={form.location}
-                onChangeText={(v) => setForm((f) => ({ ...f, location: v }))}
-              />
+              <View style={fieldStyles.wrap}>
+                <Text style={fieldStyles.label}>Location</Text>
+                <View style={locStyles.modeRow}>
+                  <Pressable
+                    onPress={() => switchMode('gps')}
+                    style={[locStyles.modeBtn, locationMode === 'gps' && locStyles.modeBtnActive]}
+                  >
+                    <Text style={[locStyles.modeBtnText, locationMode === 'gps' && locStyles.modeBtnTextActive]}>
+                      📍 Use my location
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => switchMode('manual')}
+                    style={[locStyles.modeBtn, locationMode === 'manual' && locStyles.modeBtnActive]}
+                  >
+                    <Text style={[locStyles.modeBtnText, locationMode === 'manual' && locStyles.modeBtnTextActive]}>
+                      ✏️ Type address
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {locationMode === 'gps' ? (
+                  <View style={locStyles.gpsBox}>
+                    {gpsStatus === 'success' && form.latitude != null ? (
+                      <>
+                        <Text style={locStyles.gpsTitle}>Location pinned</Text>
+                        <Text style={locStyles.gpsCoords}>
+                          {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+                        </Text>
+                        <Pressable onPress={detectLocation} style={locStyles.gpsRefresh}>
+                          <Text style={locStyles.gpsRefreshText}>Re-detect</Text>
+                        </Pressable>
+                      </>
+                    ) : gpsStatus === 'loading' ? (
+                      <Text style={locStyles.gpsHint}>Detecting your location…</Text>
+                    ) : (
+                      <>
+                        <Text style={locStyles.gpsHint}>
+                          {gpsStatus === 'error'
+                            ? gpsError || 'Could not get location'
+                            : 'Tap detect to pin your current location on the map'}
+                        </Text>
+                        <Pressable onPress={detectLocation} style={locStyles.gpsBtn}>
+                          <Text style={locStyles.gpsBtnText}>Detect my location</Text>
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
+                ) : (
+                  <TextInput
+                    placeholder="City, State or full address"
+                    placeholderTextColor={colors.textMuted}
+                    value={form.location}
+                    onChangeText={(v) => setForm((f) => ({ ...f, location: v, latitude: null, longitude: null }))}
+                    style={[
+                      fieldStyles.input,
+                      Platform.OS === 'web' && { transition: transitions.base, outlineStyle: 'none' },
+                    ]}
+                  />
+                )}
+              </View>
             </FadeInUp>
 
             <View style={{ height: 24 }} />
@@ -346,4 +450,82 @@ const fieldStyles = StyleSheet.create({
     boxShadow: '0 0 0 4px rgba(79, 70, 229, 0.12)',
   },
   textArea: { minHeight: 96, textAlignVertical: 'top' },
+});
+
+const locStyles = StyleSheet.create({
+  modeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+  },
+  modeBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  modeBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  modeBtnTextActive: {
+    color: colors.accent,
+  },
+  gpsBox: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: 14,
+    alignItems: 'flex-start',
+  },
+  gpsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  gpsCoords: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 10,
+  },
+  gpsHint: {
+    fontSize: 13,
+    color: colors.textTertiary,
+    marginBottom: 10,
+    lineHeight: 18,
+  },
+  gpsBtn: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+  },
+  gpsBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  gpsRefresh: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  gpsRefreshText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
 });
