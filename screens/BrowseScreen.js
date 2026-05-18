@@ -21,9 +21,41 @@ function ensureKeyframes() {
       50% { background-position: 100% 50%; }
       100% { background-position: 0% 50%; }
     }
+    @keyframes sandDissolve {
+      0% {
+        opacity: 1;
+        filter: blur(0px) brightness(1);
+        transform: translateY(0) scale(1);
+      }
+      35% {
+        opacity: 0.78;
+        filter: blur(2px) brightness(1.05);
+        transform: translateY(6px) scale(1.012);
+      }
+      75% {
+        opacity: 0.28;
+        filter: blur(8px) brightness(1.12);
+        transform: translateY(20px) scale(1.03);
+      }
+      100% {
+        opacity: 0;
+        filter: blur(16px) brightness(1.2);
+        transform: translateY(38px) scale(1.05);
+      }
+    }
+    @keyframes sandGrainEmerge {
+      0% { opacity: 0.32; }
+      60% { opacity: 0.85; }
+      100% { opacity: 1; }
+    }
   `;
   document.head.appendChild(tag);
 }
+
+const NOISE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.7 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>';
+const NOISE_URL = Platform.OS === 'web'
+  ? `url("data:image/svg+xml;utf8,${encodeURIComponent(NOISE_SVG)}")`
+  : null;
 
 const liveDark = Platform.OS === 'web'
   ? {
@@ -493,19 +525,12 @@ function OfferMap({ offer, t }) {
   const [unfolded, setUnfolded] = useState(false);
   const [coverGone, setCoverGone] = useState(false);
   const reveal = useRef(new Animated.Value(0)).current;
-  const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (unfolded) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [unfolded, shimmer]);
+    if (!unfolded) return;
+    const id = setTimeout(() => setCoverGone(true), 1300);
+    return () => clearTimeout(id);
+  }, [unfolded]);
 
   if (Platform.OS !== 'web') return null;
   const hasCoords = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
@@ -523,32 +548,14 @@ function OfferMap({ offer, t }) {
     setUnfolded(true);
     Animated.timing(reveal, {
       toValue: 1,
-      duration: 900,
-      easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+      duration: 1200,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
       useNativeDriver: true,
-    }).start(() => setCoverGone(true));
+    }).start();
   }
 
-  const topHalfStyle = {
-    opacity: reveal.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 0.6, 0] }),
-    transform: [
-      { perspective: 900 },
-      { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [0, -28] }) },
-      { rotateX: reveal.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-92deg'] }) },
-    ],
-  };
-  const bottomHalfStyle = {
-    opacity: reveal.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 0.6, 0] }),
-    transform: [
-      { perspective: 900 },
-      { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [0, 28] }) },
-      { rotateX: reveal.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '92deg'] }) },
-    ],
-  };
-  const buttonOpacity = reveal.interpolate({ inputRange: [0, 0.25, 1], outputRange: [1, 0, 0] });
-  const mapScale = reveal.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] });
-  const mapOpacity = reveal.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.6, 1] });
-  const shimmerTx = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-30, 30] });
+  const mapScale = reveal.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] });
+  const mapOpacity = reveal.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.55, 1] });
 
   return (
     <View style={styles.mapWrap}>
@@ -572,42 +579,22 @@ function OfferMap({ offer, t }) {
         </Animated.View>
 
         {!coverGone ? (
-          <View pointerEvents={unfolded ? 'none' : 'auto'} style={styles.mapCoverWrap}>
-            <Animated.View
+          <View
+            pointerEvents={unfolded ? 'none' : 'auto'}
+            style={[
+              styles.mapCoverWrap,
+              liveDark,
+              unfolded && styles.mapCoverDissolving,
+            ]}
+          >
+            <View
+              pointerEvents="none"
               style={[
-                styles.mapCoverHalf,
-                styles.mapCoverTop,
-                liveDark,
-                topHalfStyle,
-                Platform.OS === 'web' ? { transformOrigin: 'top center', backfaceVisibility: 'hidden' } : null,
+                styles.mapCoverGrain,
+                unfolded && styles.mapCoverGrainEmerge,
               ]}
-            >
-              <Animated.View
-                style={[
-                  styles.mapCoverShine,
-                  { transform: [{ translateX: shimmerTx }] },
-                ]}
-              />
-            </Animated.View>
-            <Animated.View
-              style={[
-                styles.mapCoverHalf,
-                styles.mapCoverBottom,
-                liveDark,
-                bottomHalfStyle,
-                Platform.OS === 'web' ? { transformOrigin: 'bottom center', backfaceVisibility: 'hidden' } : null,
-              ]}
-            >
-              <Animated.View
-                style={[
-                  styles.mapCoverShine,
-                  styles.mapCoverShineBottom,
-                  { transform: [{ translateX: shimmerTx }] },
-                ]}
-              />
-            </Animated.View>
-
-            <Animated.View style={[styles.mapCoverContent, { opacity: buttonOpacity }]} pointerEvents="box-none">
+            />
+            <View style={styles.mapCoverContent} pointerEvents="box-none">
               <View style={styles.mapCoverPinRow}>
                 <Text style={styles.mapCoverPin}>📍</Text>
                 <Text style={styles.mapCoverLabel}>{t('Location hidden')}</Text>
@@ -622,7 +609,7 @@ function OfferMap({ offer, t }) {
               >
                 <Text style={styles.mapUnfoldBtnText}>{t('Unfold location')}</Text>
               </Pressable>
-            </Animated.View>
+            </View>
           </View>
         ) : null}
       </View>
@@ -1000,36 +987,26 @@ const styles = StyleSheet.create({
   },
   mapCoverWrap: {
     ...StyleSheet.absoluteFillObject,
-  },
-  mapCoverHalf: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: '50%',
     overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  mapCoverTop: {
-    top: 0,
-  },
-  mapCoverBottom: {
-    bottom: 0,
-  },
-  mapCoverShine: {
-    position: 'absolute',
-    top: 0,
-    left: '-30%',
-    width: '60%',
-    height: '100%',
-    backgroundImage: Platform.OS === 'web'
-      ? 'linear-gradient(110deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 100%)'
-      : undefined,
-    transform: [{ skewX: '-18deg' }],
-  },
-  mapCoverShineBottom: {
-    backgroundImage: Platform.OS === 'web'
-      ? 'linear-gradient(110deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0) 100%)'
-      : undefined,
-  },
+  mapCoverDissolving: Platform.OS === 'web'
+    ? { animation: 'sandDissolve 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards' }
+    : null,
+  mapCoverGrain: Platform.OS === 'web'
+    ? {
+        ...StyleSheet.absoluteFillObject,
+        backgroundImage: NOISE_URL,
+        backgroundSize: '220px 220px',
+        backgroundRepeat: 'repeat',
+        mixBlendMode: 'overlay',
+        opacity: 0.32,
+      }
+    : { ...StyleSheet.absoluteFillObject, opacity: 0.2 },
+  mapCoverGrainEmerge: Platform.OS === 'web'
+    ? { animation: 'sandGrainEmerge 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards' }
+    : null,
   mapCoverContent: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
