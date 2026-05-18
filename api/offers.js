@@ -7,8 +7,8 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  // Strip trailing slash and any accidental path
-  const url = rawUrl.replace(/\/+$/, '');
+  // Strip trailing slash and accidental /rest/v1 suffix
+  const url = rawUrl.replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
   console.log('[offers] base url:', url, 'key len:', key.length);
 
   async function callSupabase(path, init) {
