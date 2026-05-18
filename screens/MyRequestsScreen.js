@@ -7,6 +7,7 @@ import { colors, radius, shadows, transitions, typography } from '../components/
 import { Button } from '../components/Button';
 import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
+import LeafletMap from '../components/LeafletMap';
 
 function Field({ label, multiline, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
@@ -213,7 +214,7 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
                     style={[locStyles.modeBtn, locationMode === 'gps' && locStyles.modeBtnActive]}
                   >
                     <Text style={[locStyles.modeBtnText, locationMode === 'gps' && locStyles.modeBtnTextActive]}>
-                      📍 Use my location
+                      Use my location
                     </Text>
                   </Pressable>
                   <Pressable
@@ -221,7 +222,7 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
                     style={[locStyles.modeBtn, locationMode === 'manual' && locStyles.modeBtnActive]}
                   >
                     <Text style={[locStyles.modeBtnText, locationMode === 'manual' && locStyles.modeBtnTextActive]}>
-                      ✏️ Type address
+                      Type address
                     </Text>
                   </Pressable>
                 </View>
@@ -231,12 +232,30 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
                     {gpsStatus === 'success' && form.latitude != null ? (
                       <>
                         <Text style={locStyles.gpsTitle}>Location pinned</Text>
-                        <Text style={locStyles.gpsCoords}>
-                          {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+                        <Text style={locStyles.gpsHelp}>
+                          Drag the pin on the map to adjust
                         </Text>
-                        <Pressable onPress={detectLocation} style={locStyles.gpsRefresh}>
-                          <Text style={locStyles.gpsRefreshText}>Re-detect</Text>
-                        </Pressable>
+                        <LeafletMap
+                          latitude={form.latitude}
+                          longitude={form.longitude}
+                          onChange={(lat, lng) =>
+                            setForm((f) => ({
+                              ...f,
+                              latitude: lat,
+                              longitude: lng,
+                              location: `Pinned location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+                            }))
+                          }
+                          height={220}
+                        />
+                        <View style={locStyles.gpsFooter}>
+                          <Text style={locStyles.gpsCoords}>
+                            {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+                          </Text>
+                          <Pressable onPress={detectLocation} style={locStyles.gpsRefresh}>
+                            <Text style={locStyles.gpsRefreshText}>Re-detect</Text>
+                          </Pressable>
+                        </View>
                       </>
                     ) : gpsStatus === 'loading' ? (
                       <Text style={locStyles.gpsHint}>Detecting your location…</Text>
@@ -486,7 +505,7 @@ const locStyles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
     padding: 14,
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
   gpsTitle: {
     fontSize: 14,
@@ -494,10 +513,21 @@ const locStyles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  gpsHelp: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginBottom: 10,
+  },
+  gpsFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
   gpsCoords: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginBottom: 10,
+    flexShrink: 1,
   },
   gpsHint: {
     fontSize: 13,
