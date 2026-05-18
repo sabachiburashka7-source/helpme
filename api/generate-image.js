@@ -1,3 +1,5 @@
+const STORAGE_BUCKET = 'offer-images';
+
 module.exports = async function handler(req, res) {
   console.log('[generate-image] called', req.method);
   if (req.method !== 'POST') {
@@ -9,9 +11,22 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: 'OPENAI_API_KEY not configured on server' });
   }
 
-  const { description, category } = req.body || {};
+  const rawSupabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!rawSupabaseUrl || !supabaseServiceKey) {
+    return res.status(500).json({ error: 'Supabase storage not configured' });
+  }
+  const supabaseUrl = rawSupabaseUrl
+    .replace(/\/+$/, '')
+    .replace(/\/rest\/v1$/, '');
+
+  const { description, category, id } = req.body || {};
   if (!description || typeof description !== 'string') {
     return res.status(400).json({ error: 'description is required' });
+  }
+  if (!id) {
+    return res.status(400).json({ error: 'id is required' });
   }
 
   const safeDescription = description.slice(0, 500);
@@ -50,7 +65,32 @@ module.exports = async function handler(req, res) {
       console.error('No image in response', JSON.stringify(data));
       return res.status(500).json({ error: 'No image returned' });
     }
-    res.json({ image: `data:image/png;base64,${b64}` });
+
+    const imageBuffer = Buffer.from(b64, 'base64');
+    const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const objectPath = `${safeId}.png`;
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/${STORAGE_BUCKET}/${objectPath}`;
+
+    const uploadResp = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${supabaseServiceKey}`,
+        apikey: supabaseServiceKey,
+        'Content-Type': 'image/png',
+        'x-upsert': 'true',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
+      body: imageBuffer,
+    });
+
+    if (!uploadResp.ok) {
+      const errText = await uploadResp.text();
+      console.error('Supabase storage upload failed', uploadResp.status, errText);
+      return res.status(500).json({ error: 'Storage upload failed', detail: errText });
+    }
+
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${STORAGE_BUCKET}/${objectPath}`;
+    res.json({ image: publicUrl });
   } catch (err) {
     console.error('generate-image exception', err);
     res.status(500).json({ error: 'Internal error' });

@@ -23,7 +23,7 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
       const r = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, category }),
+        body: JSON.stringify({ description, category, id }),
       });
       if (!r.ok) {
         onUpdateOffer?.(id, { generatingImage: false });
