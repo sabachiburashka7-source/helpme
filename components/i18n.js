@@ -270,7 +270,7 @@ const switcherStyles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   chipMd: { paddingHorizontal: 12, paddingVertical: 5 },
-  chipActive: { backgroundColor: '#0a0a0a' },
+  chipActive: { backgroundColor: colors.accent },
   chipHover: { backgroundColor: colors.surfaceAlt },
   text: {
     fontSize: 10,

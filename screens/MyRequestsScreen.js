@@ -32,20 +32,20 @@ function ensureKeyframes() {
 const liveDark = Platform.OS === 'web'
   ? {
       backgroundImage:
-        'linear-gradient(120deg, #050505 0%, #1c1c1c 25%, #595959 50%, #1c1c1c 75%, #050505 100%)',
+        'linear-gradient(120deg, #2A040F 0%, #5A0E25 25%, #9C2A4C 50%, #5A0E25 75%, #2A040F 100%)',
       backgroundSize: '300% 300%',
       animation: 'liveGradient 8s ease-in-out infinite',
     }
-  : { backgroundColor: '#0a0a0a' };
+  : { backgroundColor: '#7A1230' };
 
 const liveLine = Platform.OS === 'web'
   ? {
       backgroundImage:
-        'linear-gradient(90deg, #050505 0%, #c4c4c4 50%, #050505 100%)',
+        'linear-gradient(90deg, #3D0612 0%, #D4658A 50%, #3D0612 100%)',
       backgroundSize: '200% 100%',
       animation: 'liveGradientLine 3.5s linear infinite',
     }
-  : { backgroundColor: '#0a0a0a' };
+  : { backgroundColor: '#7A1230' };
 
 function confirmDialog(title, message) {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+    boxShadow: '0 8px 24px rgba(122, 18, 48, 0.28)',
   },
   avatarText: { color: '#fff', fontWeight: '700', fontSize: 20, letterSpacing: 0.5 },
   profileName: { fontSize: 16, fontWeight: '700', color: colors.text, textAlign: 'center' },
@@ -649,8 +649,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   deleteBtnHover: {
-    borderColor: '#0a0a0a',
-    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
   },
   deleteBtnText: {
     fontSize: 11,
@@ -715,11 +715,11 @@ const gradStyles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.22)',
+    boxShadow: '0 10px 24px rgba(122, 18, 48, 0.32)',
   },
   md: { paddingVertical: 13, paddingHorizontal: 18 },
   lg: { paddingVertical: 15, paddingHorizontal: 22 },
-  hover: { boxShadow: '0 14px 30px rgba(0, 0, 0, 0.28)' },
+  hover: { boxShadow: '0 14px 30px rgba(122, 18, 48, 0.42)' },
   text: {
     color: '#fff',
     fontSize: 15,
@@ -738,8 +738,8 @@ const pillStyles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   hover: {
-    borderColor: '#0a0a0a',
-    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
   },
   text: {
     fontSize: 12,
@@ -763,9 +763,9 @@ const fieldStyles = StyleSheet.create({
     color: colors.text,
   },
   inputFocused: {
-    borderColor: '#0a0a0a',
+    borderColor: colors.accent,
     backgroundColor: '#fff',
-    boxShadow: '0 0 0 4px rgba(10, 10, 10, 0.08)',
+    boxShadow: '0 0 0 4px rgba(122, 18, 48, 0.14)',
   },
   textArea: { minHeight: 96, textAlignVertical: 'top' },
 });
@@ -787,8 +787,8 @@ const locStyles = StyleSheet.create({
     alignItems: 'center',
   },
   modeBtnActive: {
-    borderColor: '#0a0a0a',
-    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
   },
   modeBtnText: {
     fontSize: 12,
@@ -796,7 +796,7 @@ const locStyles = StyleSheet.create({
     color: colors.textSecondary,
   },
   modeBtnTextActive: {
-    color: '#0a0a0a',
+    color: colors.accent,
     fontWeight: '700',
   },
   gpsBox: {

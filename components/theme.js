@@ -10,11 +10,12 @@ export const colors = {
   textTertiary: '#A1A1AA',
   textMuted: '#D4D4D8',
 
-  accent: '#4F46E5',
-  accentHover: '#4338CA',
-  accentPress: '#3730A3',
-  accentSoft: '#EEF2FF',
-  accentSoftBorder: '#E0E7FF',
+  accent: '#7A1230',
+  accentHover: '#5A0E25',
+  accentPress: '#3D0612',
+  accentSoft: '#FBEFF3',
+  accentSoftBorder: '#F0CCD7',
+  accentDeep: '#3D0612',
 
   danger: '#DC2626',
   dangerSoft: '#FEF2F2',
@@ -72,8 +73,8 @@ export const shadows = {
     elevation: 4,
   },
   button: {
-    shadowColor: '#4F46E5',
-    shadowOpacity: 0.25,
+    shadowColor: '#7A1230',
+    shadowOpacity: 0.28,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,

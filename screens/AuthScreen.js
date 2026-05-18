@@ -274,6 +274,6 @@ const fieldStyles = StyleSheet.create({
   inputFocused: {
     borderColor: colors.accent,
     backgroundColor: '#fff',
-    boxShadow: '0 0 0 4px rgba(79, 70, 229, 0.12)',
+    boxShadow: '0 0 0 4px rgba(122, 18, 48, 0.14)',
   },
 });

@@ -11,7 +11,7 @@ import { useTranslation } from '../components/i18n';
 const SVG_BY_CATEGORY = {
   Moving: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <rect x='40' y='80' width='90' height='80'/>
       <path d='M40 105 L130 105'/>
       <path d='M85 80 L85 105'/>
@@ -22,7 +22,7 @@ const SVG_BY_CATEGORY = {
   </svg>`,
   Assembly: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <path d='M60 160 L160 80'/>
       <path d='M55 165 L70 150 L80 160 L65 175 Z'/>
       <path d='M150 70 L175 55 L200 55 L210 75 L195 90 L170 90 Z'/>
@@ -32,7 +32,7 @@ const SVG_BY_CATEGORY = {
   </svg>`,
   Home: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <path d='M40 170 L280 170'/>
       <path d='M80 90 L160 40 L240 90'/>
       <path d='M100 90 L100 170'/>
@@ -43,7 +43,7 @@ const SVG_BY_CATEGORY = {
   </svg>`,
   Other: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
     <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#4F46E5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
+    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
       <circle cx='100' cy='75' r='20'/>
       <path d='M100 95 L100 155'/>
       <path d='M100 115 L72 145'/>

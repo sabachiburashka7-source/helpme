@@ -58,7 +58,7 @@ function buildMarkerElement(accent) {
     'border-radius: 50%',
     `background: ${accent}`,
     'border: 3px solid #fff',
-    'box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(79, 70, 229, 0.15)',
+    'box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(122, 18, 48, 0.18)',
     'box-sizing: border-box',
     'transition: transform 120ms ease',
     'pointer-events: none',
