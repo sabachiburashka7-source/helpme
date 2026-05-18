@@ -68,7 +68,6 @@ const dict = {
     'Call now': 'Позвонить',
     'Open in Google Maps ↗': 'Открыть в Google Maps ↗',
     'Unfold location': 'Раскрыть локацию',
-    'Location hidden': 'Локация скрыта',
 
     // My requests
     'New request': 'Новый запрос',
@@ -155,7 +154,6 @@ const dict = {
     'Call now': 'დარეკვა',
     'Open in Google Maps ↗': 'გახსნა Google Maps-ში ↗',
     'Unfold location': 'მდებარეობის გახსნა',
-    'Location hidden': 'მდებარეობა დაფარულია',
 
     // My requests
     'New request': 'ახალი მოთხოვნა',

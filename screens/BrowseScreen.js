@@ -21,35 +21,35 @@ function ensureKeyframes() {
       50% { background-position: 100% 50%; }
       100% { background-position: 0% 50%; }
     }
-    @keyframes sandDissolve {
-      0% {
-        opacity: 1;
-        filter: blur(0px) brightness(1);
-        transform: translateY(0) scale(1);
-      }
-      35% {
-        opacity: 0.78;
-        filter: blur(2px) brightness(1.05);
-        transform: translateY(6px) scale(1.012);
-      }
-      75% {
-        opacity: 0.28;
-        filter: blur(8px) brightness(1.12);
-        transform: translateY(20px) scale(1.03);
-      }
-      100% {
-        opacity: 0;
-        filter: blur(16px) brightness(1.2);
-        transform: translateY(38px) scale(1.05);
-      }
-    }
-    @keyframes sandGrainEmerge {
-      0% { opacity: 0.32; }
-      60% { opacity: 0.85; }
-      100% { opacity: 1; }
-    }
   `;
   document.head.appendChild(tag);
+}
+
+const SAND_FILTER_ID = 'helpme-sand-dissolve';
+const SAND_ALPHA_ID = 'helpme-sand-dissolve-alpha';
+const SAND_SVG_ID = 'helpme-sand-dissolve-svg';
+
+function ensureSandFilter() {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+  if (document.getElementById(SAND_SVG_ID)) return;
+  const host = document.createElement('div');
+  host.id = SAND_SVG_ID;
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
+  host.innerHTML =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0">' +
+      '<defs>' +
+        '<filter id="' + SAND_FILTER_ID + '" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">' +
+          '<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="11" stitchTiles="stitch" result="noise"/>' +
+          '<feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0" result="mask"/>' +
+          '<feComponentTransfer in="mask" result="threshold">' +
+            '<feFuncA id="' + SAND_ALPHA_ID + '" type="linear" slope="1" intercept="1"/>' +
+          '</feComponentTransfer>' +
+          '<feComposite in="SourceGraphic" in2="threshold" operator="in"/>' +
+        '</filter>' +
+      '</defs>' +
+    '</svg>';
+  document.body.appendChild(host);
 }
 
 const NOISE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.7 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>';
@@ -525,12 +525,21 @@ function OfferMap({ offer, t }) {
   const [unfolded, setUnfolded] = useState(false);
   const [coverGone, setCoverGone] = useState(false);
   const reveal = useRef(new Animated.Value(0)).current;
+  const rafRef = useRef(null);
 
   useEffect(() => {
-    if (!unfolded) return;
-    const id = setTimeout(() => setCoverGone(true), 1300);
-    return () => clearTimeout(id);
-  }, [unfolded]);
+    ensureSandFilter();
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const alphaEl = document.getElementById(SAND_ALPHA_ID);
+      if (alphaEl) alphaEl.setAttribute('intercept', '1');
+    }
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, []);
 
   if (Platform.OS !== 'web') return null;
   const hasCoords = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
@@ -546,28 +555,51 @@ function OfferMap({ offer, t }) {
   function unfoldCover() {
     if (unfolded) return;
     setUnfolded(true);
+
     Animated.timing(reveal, {
       toValue: 1,
-      duration: 1200,
+      duration: 1700,
       easing: Easing.bezier(0.4, 0, 0.2, 1),
       useNativeDriver: true,
     }).start();
+
+    const alphaEl = typeof document !== 'undefined'
+      ? document.getElementById(SAND_ALPHA_ID)
+      : null;
+    if (!alphaEl) {
+      setTimeout(() => setCoverGone(true), 1700);
+      return;
+    }
+    alphaEl.setAttribute('intercept', '1');
+    const startT = performance.now();
+    const duration = 1700;
+    function tick(now) {
+      const k = Math.min(1, (now - startT) / duration);
+      // ease-in-out so first specks vanish slowly, then it accelerates,
+      // then settles into the last specks
+      const eased = k < 0.5
+        ? 2 * k * k
+        : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      // intercept goes 1 → -1.1 (slight overshoot ensures full clearance)
+      const intercept = 1 - eased * 2.1;
+      alphaEl.setAttribute('intercept', String(intercept));
+      if (k < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        rafRef.current = null;
+        setCoverGone(true);
+      }
+    }
+    rafRef.current = requestAnimationFrame(tick);
   }
 
-  const mapScale = reveal.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] });
-  const mapOpacity = reveal.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.55, 1] });
+  const mapOpacity = reveal.interpolate({ inputRange: [0, 0.55, 1], outputRange: [0, 0.6, 1] });
+  const btnOpacity = reveal.interpolate({ inputRange: [0, 0.15, 0.45], outputRange: [1, 0.5, 0] });
 
   return (
     <View style={styles.mapWrap}>
       <View style={styles.mapFrame}>
-        <Animated.View
-          style={{
-            width: '100%',
-            height: '100%',
-            opacity: mapOpacity,
-            transform: [{ scale: mapScale }],
-          }}
-        >
+        <Animated.View style={{ width: '100%', height: '100%', opacity: mapOpacity }}>
           {React.createElement('iframe', {
             src,
             loading: 'lazy',
@@ -587,18 +619,11 @@ function OfferMap({ offer, t }) {
               unfolded && styles.mapCoverDissolving,
             ]}
           >
-            <View
-              pointerEvents="none"
-              style={[
-                styles.mapCoverGrain,
-                unfolded && styles.mapCoverGrainEmerge,
-              ]}
-            />
-            <View style={styles.mapCoverContent} pointerEvents="box-none">
-              <View style={styles.mapCoverPinRow}>
-                <Text style={styles.mapCoverPin}>📍</Text>
-                <Text style={styles.mapCoverLabel}>{t('Location hidden')}</Text>
-              </View>
+            <View pointerEvents="none" style={styles.mapCoverGrain} />
+            <Animated.View
+              style={[styles.mapCoverContent, { opacity: btnOpacity }]}
+              pointerEvents={unfolded ? 'none' : 'box-none'}
+            >
               <Pressable
                 onPress={unfoldCover}
                 style={({ hovered }) => [
@@ -609,7 +634,7 @@ function OfferMap({ offer, t }) {
               >
                 <Text style={styles.mapUnfoldBtnText}>{t('Unfold location')}</Text>
               </Pressable>
-            </View>
+            </Animated.View>
           </View>
         ) : null}
       </View>
@@ -992,7 +1017,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mapCoverDissolving: Platform.OS === 'web'
-    ? { animation: 'sandDissolve 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards' }
+    ? { filter: `url(#${SAND_FILTER_ID})`, WebkitFilter: `url(#${SAND_FILTER_ID})` }
     : null,
   mapCoverGrain: Platform.OS === 'web'
     ? {
@@ -1004,29 +1029,11 @@ const styles = StyleSheet.create({
         opacity: 0.32,
       }
     : { ...StyleSheet.absoluteFillObject, opacity: 0.2 },
-  mapCoverGrainEmerge: Platform.OS === 'web'
-    ? { animation: 'sandGrainEmerge 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards' }
-    : null,
   mapCoverContent: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
-  },
-  mapCoverPinRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  mapCoverPin: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  mapCoverLabel: {
-    color: 'rgba(255,255,255,0.92)',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.4,
   },
   mapUnfoldBtn: {
     backgroundColor: 'rgba(255,255,255,0.16)',
