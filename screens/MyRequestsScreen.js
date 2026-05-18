@@ -149,10 +149,6 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
               <Text style={styles.profileName} numberOfLines={1}>{profile.name}</Text>
               <Text style={styles.profileSub} numberOfLines={1}>{profile.phone}</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={styles.statNum}>{myOffers.length}</Text>
-              <Text style={styles.statLabel}>posted</Text>
-            </View>
             {onLogout ? (
               <Button
                 title="Sign out"
@@ -160,7 +156,6 @@ export default function MyRequestsScreen({ user, myOffers, onAddOffer, onUpdateO
                 size="sm"
                 fullWidth={false}
                 onPress={onLogout}
-                style={{ marginLeft: 10 }}
               />
             ) : null}
           </View>
@@ -350,34 +345,23 @@ const styles = StyleSheet.create({
   profile: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 52,
-    paddingBottom: 18,
+    paddingTop: 24,
+    paddingBottom: 10,
     paddingHorizontal: 20,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
     ...shadows.button,
   },
-  avatarText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  profileName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  profileSub: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-  statBox: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  statNum: { fontSize: 16, fontWeight: '800', color: colors.text },
-  statLabel: { fontSize: 9, color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: '600' },
+  avatarText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  profileName: { fontSize: 15, fontWeight: '700', color: colors.text },
+  profileSub: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
 
   tabsWrap: { paddingHorizontal: 20 },
 
