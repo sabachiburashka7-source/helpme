@@ -61,7 +61,7 @@ function imageUrlFor(offer) {
 }
 const imageSizeFor = (offer) => (offer.image ? 'cover' : 'contain');
 
-const HEADER_HEIGHT = 110;
+const HEADER_HEIGHT = 64;
 
 export default function BrowseScreen({ dbOffers }) {
   const [search, setSearch] = useState('');
@@ -426,11 +426,11 @@ const styles = StyleSheet.create({
   },
   headerBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 56,
+    paddingTop: 14,
     paddingHorizontal: 20,
-    paddingBottom: 14,
+    paddingBottom: 10,
   },
   headerTitle: { ...typography.h1, fontSize: 24 },
   headerSub: { ...typography.caption, color: colors.textTertiary, marginTop: 4 },
