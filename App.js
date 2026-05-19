@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Platform, useWindowDimensions, Animated, Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import BrowseScreen from './screens/BrowseScreen';
 import MyRequestsScreen from './screens/MyRequestsScreen';
 import AuthScreen from './screens/AuthScreen';
@@ -31,9 +33,12 @@ function persistUser(user) {
 
 export default function App() {
   return (
-    <I18nProvider>
-      <AppInner />
-    </I18nProvider>
+    <SafeAreaProvider>
+      <StatusBar style="dark" />
+      <I18nProvider>
+        <AppInner />
+      </I18nProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -184,9 +189,7 @@ function AppInner() {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
             borderTopWidth: 1,
-            height: 48,
-            paddingBottom: 4,
-            paddingTop: 4,
+            paddingTop: 6,
             paddingHorizontal: 8,
             elevation: 0,
             shadowOpacity: 0,

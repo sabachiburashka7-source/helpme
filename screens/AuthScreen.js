@@ -10,6 +10,8 @@ import FadeInUp from '../components/FadeInUp';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { pickProfileImage, isImageUrl } from '../components/profileImage';
 import { apiUrl } from '../components/apiBase';
+import { BgImage } from '../components/BgImage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -197,6 +199,10 @@ export default function AuthScreen({ onAuthenticated }) {
   }
 
   return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      edges={['top', 'bottom', 'left', 'right']}
+    >
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -254,17 +260,10 @@ export default function AuthScreen({ onAuthenticated }) {
                         ]}
                       >
                         {isImageUrl(profileImage) ? (
-                          <View
-                            style={[
-                              styles.avatarImage,
-                              Platform.OS === 'web'
-                                ? {
-                                    backgroundImage: `url("${profileImage}")`,
-                                    backgroundSize: 'cover',
-                                    backgroundPosition: 'center',
-                                  }
-                                : null,
-                            ]}
+                          <BgImage
+                            source={profileImage}
+                            resizeMode="cover"
+                            style={styles.avatarImage}
                           />
                         ) : (
                           <Text style={styles.avatarPickPlus}>+</Text>
@@ -400,6 +399,7 @@ export default function AuthScreen({ onAuthenticated }) {
         </FadeInUp>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 

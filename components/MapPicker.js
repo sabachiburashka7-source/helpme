@@ -204,6 +204,14 @@ function buildNativeHtml({ latitude, longitude, draggable, accent }) {
       }
     } catch (e) {}
   }
+  window.onerror = function (message, source, lineno, colno, error) {
+    post({ type: 'error', message: String(message) + ' @' + lineno + ':' + colno });
+    return false;
+  };
+  if (typeof maplibregl === 'undefined') {
+    post({ type: 'error', message: 'MapLibre script failed to load' });
+    throw new Error('MapLibre missing');
+  }
   var map = new maplibregl.Map({
     container: 'map',
     style: '${STYLE_URL}',
@@ -252,6 +260,8 @@ function MapPickerNative({ latitude, longitude, onChange, draggable, height }) {
   const { WebView } = require('react-native-webview');
   const webRef = useRef(null);
   const lastSentRef = useRef({ lat: latitude, lng: longitude });
+  const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Keep the WebView pin in sync when the parent updates lat/lng.
   useEffect(() => {
@@ -277,6 +287,11 @@ function MapPickerNative({ latitude, longitude, onChange, draggable, height }) {
       if (data.type === 'pin' && typeof data.lat === 'number' && typeof data.lng === 'number') {
         lastSentRef.current = { lat: data.lat, lng: data.lng };
         onChange?.(data.lat, data.lng);
+      } else if (data.type === 'ready') {
+        setStatus('ready');
+      } else if (data.type === 'error') {
+        setStatus('error');
+        setErrorMsg(data.message || 'Map error');
       }
     } catch {}
   }
@@ -286,13 +301,31 @@ function MapPickerNative({ latitude, longitude, onChange, draggable, height }) {
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, baseUrl: 'https://localhost' }}
         onMessage={handleMessage}
+        onError={(e) => {
+          setStatus('error');
+          setErrorMsg(e?.nativeEvent?.description || 'WebView failed to load');
+        }}
+        onHttpError={(e) => {
+          setStatus('error');
+          setErrorMsg(`HTTP ${e?.nativeEvent?.statusCode || '?'} loading map`);
+        }}
         style={{ flex: 1, backgroundColor: 'transparent' }}
         javaScriptEnabled
         domStorageEnabled
         scrollEnabled={false}
+        mixedContentMode="always"
+        allowFileAccess
+        allowUniversalAccessFromFileURLs
       />
+      {status !== 'ready' ? (
+        <View style={styles.overlay} pointerEvents="none">
+          <Text style={styles.overlayText}>
+            {status === 'error' ? `Map: ${errorMsg}` : 'Loading map…'}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -354,6 +387,23 @@ const styles = StyleSheet.create({
   errorHint: {
     fontSize: 11,
     color: colors.textTertiary,
+    textAlign: 'center',
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244,242,250,0.85)',
+  },
+  overlayText: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    fontWeight: '600',
+    paddingHorizontal: 12,
     textAlign: 'center',
   },
 });

@@ -12,6 +12,8 @@ import { pickProfileImage, pickOfferImages, isImageUrl } from '../components/pro
 import { reverseGeocode } from '../components/reverseGeocode';
 import { apiUrl } from '../components/apiBase';
 import { getCurrentLocation } from '../components/location';
+import { BgImage } from '../components/BgImage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MAX_OFFER_IMAGES = 6;
 
@@ -345,6 +347,10 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
   }
 
   return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      edges={['top', 'left', 'right']}
+    >
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -371,17 +377,10 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
               ]}
             >
               {isImageUrl(profile.profileImage) ? (
-                <View
-                  style={[
-                    styles.avatarImage,
-                    Platform.OS === 'web'
-                      ? {
-                          backgroundImage: `url("${profile.profileImage}")`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }
-                      : null,
-                  ]}
+                <BgImage
+                  source={profile.profileImage}
+                  resizeMode="cover"
+                  style={styles.avatarImage}
                 />
               ) : (
                 <Text style={styles.avatarPlus}>+</Text>
@@ -427,17 +426,10 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                   <View style={photoStyles.thumbRow}>
                     {(form.images || []).map((src, i) => (
                       <View key={i} style={photoStyles.thumbWrap}>
-                        <View
-                          style={[
-                            photoStyles.thumb,
-                            Platform.OS === 'web'
-                              ? {
-                                  backgroundImage: `url("${src}")`,
-                                  backgroundSize: 'cover',
-                                  backgroundPosition: 'center',
-                                }
-                              : null,
-                          ]}
+                        <BgImage
+                          source={src}
+                          resizeMode="cover"
+                          style={photoStyles.thumb}
                         />
                         <Pressable
                           onPress={() => removeOfferImage(i)}
@@ -598,6 +590,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
         )}
       </View>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -613,7 +606,7 @@ function MyOfferCard({ offer, onRemove }) {
   return (
     <View style={styles.myCard}>
       {offer.image ? (
-        <View style={[styles.myCardImage, { backgroundImage: `url("${offer.image}")` }]} />
+        <BgImage source={offer.image} resizeMode="cover" style={styles.myCardImage} />
       ) : offer.generatingImage ? (
         <View style={styles.myCardImagePlaceholder}>
           <View style={[styles.spinDot, liveDark]} />
@@ -644,18 +637,11 @@ function MyOfferCard({ offer, onRemove }) {
       {Array.isArray(offer.images) && offer.images.length > 0 ? (
         <View style={styles.myCardPhotos}>
           {offer.images.map((src, i) => (
-            <View
+            <BgImage
               key={i}
-              style={[
-                styles.myCardPhoto,
-                Platform.OS === 'web'
-                  ? {
-                      backgroundImage: `url("${src}")`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }
-                  : null,
-              ]}
+              source={src}
+              resizeMode="cover"
+              style={styles.myCardPhoto}
             />
           ))}
         </View>

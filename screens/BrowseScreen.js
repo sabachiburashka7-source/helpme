@@ -10,6 +10,9 @@ import { useTranslation } from '../components/i18n';
 import { isImageUrl } from '../components/profileImage';
 import { reverseGeocode, getCachedLocationName, isPinnedCoordinateString } from '../components/reverseGeocode';
 import { getCurrentLocation } from '../components/location';
+import { BgImage } from '../components/BgImage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MapPicker from '../components/MapPicker';
 
 function useDisplayLocation(offer) {
   const hasCoords = offer && typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
@@ -176,6 +179,7 @@ function haversineKm(a, b) {
 export default function BrowseScreen({ dbOffers, loading }) {
   useEffect(() => { ensureKeyframes(); }, []);
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -262,7 +266,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={[styles.list, { paddingTop: HEADER_HEIGHT + 8 }]}
+        contentContainerStyle={[styles.list, { paddingTop: HEADER_HEIGHT + 8 + insets.top }]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -291,6 +295,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
         style={[
           styles.headerFloat,
           {
+            paddingTop: insets.top,
             opacity: headerOpacity,
             transform: [{ translateY: headerOffset }],
           },
@@ -516,11 +521,11 @@ function OfferCard({ offer, onPress }) {
   return (
     <PressableScale onPress={onPress} hoverLift style={styles.cardWrap}>
       <View style={styles.card}>
-        <View
-          style={[
-            styles.cardImage,
-            { backgroundImage: imageUrlFor(offer), backgroundSize: imageSizeFor(offer) },
-          ]}
+        <BgImage
+          source={offer.image}
+          resizeMode="cover"
+          placeholderText={offer.category}
+          style={styles.cardImage}
         >
           {offer.generatingImage && !offer.image ? (
             <View style={styles.imageLoadingBadge}>
@@ -531,7 +536,7 @@ function OfferCard({ offer, onPress }) {
           <View style={styles.cardPriceTag}>
             <Text style={styles.cardPriceTagText}>${offer.price}</Text>
           </View>
-        </View>
+        </BgImage>
         <View style={styles.cardBody}>
           <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
           <View style={styles.cardBottomRow}>
@@ -564,7 +569,25 @@ function OfferMap({ offer, t }) {
     };
   }, []);
 
-  if (Platform.OS !== 'web') return null;
+  if (Platform.OS !== 'web') {
+    // Native: render the same MapLibre WebView we use for picking, but
+    // non-interactive. The fancy "sand uncover" reveal animation is web-only
+    // (it relies on an SVG filter in the DOM), so we just show the map
+    // directly.
+    const hasCoordsN = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
+    if (!hasCoordsN) return null;
+    return (
+      <View style={styles.mapWrap}>
+        <MapPicker
+          latitude={offer.latitude}
+          longitude={offer.longitude}
+          onChange={() => {}}
+          draggable={false}
+          height={200}
+        />
+      </View>
+    );
+  }
   const hasCoords = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
   const query = hasCoords
     ? `${offer.latitude},${offer.longitude}`
@@ -709,28 +732,21 @@ function DetailsModal({ offer, onClose }) {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.modalScrollContent}
           >
-            <View
-              style={[
-                styles.modalImage,
-                { backgroundImage: imageUrlFor(data), backgroundSize: imageSizeFor(data) },
-              ]}
+            <BgImage
+              source={data.image}
+              resizeMode="cover"
+              placeholderText={data.category}
+              style={styles.modalImage}
             />
 
             <View style={styles.modalBody}>
               <View style={styles.modalHeaderRow}>
                 <View style={styles.avatar}>
                   {isImageUrl(data.profile_image) ? (
-                    <View
-                      style={[
-                        styles.avatarImage,
-                        Platform.OS === 'web'
-                          ? {
-                              backgroundImage: `url("${data.profile_image}")`,
-                              backgroundSize: 'cover',
-                              backgroundPosition: 'center',
-                            }
-                          : null,
-                      ]}
+                    <BgImage
+                      source={data.profile_image}
+                      resizeMode="cover"
+                      style={styles.avatarImage}
                     />
                   ) : (
                     <Text style={styles.avatarPlus}>+</Text>
@@ -772,18 +788,11 @@ function DetailsModal({ offer, onClose }) {
                     contentContainerStyle={styles.photoStripContent}
                   >
                     {data.images.map((src, i) => (
-                      <View
+                      <BgImage
                         key={i}
-                        style={[
-                          styles.photoStripTile,
-                          Platform.OS === 'web'
-                            ? {
-                                backgroundImage: `url("${src}")`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                              }
-                            : null,
-                        ]}
+                        source={src}
+                        resizeMode="cover"
+                        style={styles.photoStripTile}
                       />
                     ))}
                   </ScrollView>
