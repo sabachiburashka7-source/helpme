@@ -35,14 +35,16 @@ export default function SegmentedTabs({ tabs, value, onChange, hideIndicator = f
         </View>
       )}
       <View style={styles.row}>
-        {tabs.map((t) => {
+        {tabs.map((t, i) => {
           const active = t.value === value;
+          const isLast = i === tabs.length - 1;
           return (
             <Pressable
               key={t.value}
               onPress={() => onChange(t.value)}
               style={({ hovered }) => [
                 styles.tab,
+                isLast && { marginRight: 0 },
                 Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
                 hovered && !active && styles.tabHover,
               ]}

@@ -38,11 +38,46 @@ function Field({ label, ...inputProps }) {
   );
 }
 
+function PhoneField({ label, value, onChangeText }) {
+  const [isFocused, setFocused] = useState(false);
+  return (
+    <View style={fieldStyles.wrap}>
+      <Text style={fieldStyles.label}>{label}</Text>
+      <View
+        style={[
+          fieldStyles.input,
+          fieldStyles.phoneRow,
+          isFocused && fieldStyles.inputFocused,
+        ]}
+      >
+        <Text style={fieldStyles.phonePrefix}>+995</Text>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="555 12 34 56"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="phone-pad"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={[
+            fieldStyles.phoneInput,
+            Platform.OS === 'web' && { transition: transitions.base, outlineStyle: 'none' },
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
+
 export default function AuthScreen({ onAuthenticated }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState('login');
   const [step, setStep] = useState('details'); // 'details' | 'code'
-  const [phone, setPhone] = useState('');
+  const [phoneLocal, setPhoneLocal] = useState('');
+  const phoneDigits = phoneLocal.replace(/[^\d]/g, '');
+  const phoneE164 = phoneDigits ? `+995${phoneDigits}` : '';
   const [name, setName] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [code, setCode] = useState('');
@@ -96,11 +131,7 @@ export default function AuthScreen({ onAuthenticated }) {
 
   async function sendCode({ resend = false } = {}) {
     setError('');
-    const trimmedPhone = phone.trim();
-    if (!trimmedPhone) return flashError(t('Enter your phone number'));
-    if (!trimmedPhone.startsWith('+')) {
-      return flashError(t('Include country code, e.g. +1 555 123 4567'));
-    }
+    if (!phoneE164 || phoneDigits.length < 8) return flashError(t('Enter your phone number'));
     if (isRegister && !name.trim()) return flashError(t('Enter your name'));
 
     setBusy(true);
@@ -110,7 +141,7 @@ export default function AuthScreen({ onAuthenticated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'send_code',
-          phone: trimmedPhone,
+          phone: phoneE164,
           intent: isRegister ? 'register' : 'login',
         }),
       });
@@ -144,7 +175,7 @@ export default function AuthScreen({ onAuthenticated }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'verify_code',
-          phone: phone.trim(),
+          phone: phoneE164,
           code: trimmedCode,
           intent: isRegister ? 'register' : 'login',
           name: isRegister ? name.trim() : undefined,
@@ -183,7 +214,7 @@ export default function AuthScreen({ onAuthenticated }) {
             <Text style={styles.brand}>helpme</Text>
             <Text style={styles.tagline}>
               {step === 'code'
-                ? t('We sent a code to {phone}').replace('{phone}', phone.trim())
+                ? t('We sent a code to {phone}').replace('{phone}', phoneE164)
                 : isRegister
                 ? t('Create your account in seconds')
                 : t('Welcome back — sign in to continue')}
@@ -252,14 +283,10 @@ export default function AuthScreen({ onAuthenticated }) {
                   </>
                 )}
 
-                <Field
+                <PhoneField
                   label={t('Phone')}
-                  placeholder="+1 555 123 4567"
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                  autoCapitalize="none"
-                  autoCorrect={false}
+                  value={phoneLocal}
+                  onChangeText={setPhoneLocal}
                 />
 
                 <Text style={styles.helperText}>
@@ -397,7 +424,7 @@ const styles = StyleSheet.create({
   brand: { ...typography.display, color: colors.text },
   tagline: { fontSize: 14, color: colors.textSecondary, marginTop: 8, lineHeight: 20 },
 
-  tabsWrap: { marginBottom: 8 },
+  tabsWrap: { marginBottom: 8, alignItems: 'center' },
 
   form: { paddingTop: 8 },
 
@@ -478,5 +505,30 @@ const fieldStyles = StyleSheet.create({
     borderColor: colors.accent,
     backgroundColor: '#fff',
     boxShadow: '0 0 0 4px rgba(122, 18, 48, 0.14)',
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingLeft: 14,
+    paddingRight: 14,
+  },
+  phonePrefix: {
+    fontSize: 14,
+    color: colors.text,
+    marginRight: 8,
+    paddingRight: 8,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+    paddingVertical: 12,
+    fontWeight: '500',
+  },
+  phoneInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
 });
