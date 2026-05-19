@@ -1,3 +1,10 @@
+const crypto = require('crypto');
+
+const CODE_TTL_MS = 5 * 60 * 1000;          // code valid for 5 min
+const MAX_ATTEMPTS = 5;                      // attempts per code
+const MAX_CODES_PER_PHONE_PER_WINDOW = 3;    // anti-abuse: codes per phone per window
+const ABUSE_WINDOW_MS = 10 * 60 * 1000;      // 10 min window
+
 function normalizePhone(input) {
   if (typeof input !== 'string') return '';
   const trimmed = input.trim();
@@ -8,6 +15,16 @@ function normalizePhone(input) {
 
 function isE164(phone) {
   return /^\+\d{8,15}$/.test(phone);
+}
+
+function generateCode() {
+  // 6-digit zero-padded, cryptographically random
+  const n = crypto.randomInt(0, 1_000_000);
+  return String(n).padStart(6, '0');
+}
+
+function hashCode(code, phone, secret) {
+  return crypto.createHmac('sha256', secret).update(`${phone}:${code}`).digest('hex');
 }
 
 module.exports = async function handler(req, res) {
@@ -44,66 +61,33 @@ module.exports = async function handler(req, res) {
     'Content-Type': 'application/json',
   };
 
-  const vonageKey = process.env.VONAGE_API_KEY;
-  const vonageSecret = process.env.VONAGE_API_SECRET;
-  const vonageBrand = process.env.VONAGE_BRAND || 'helpme';
-  const vonageConfigured = Boolean(vonageKey && vonageSecret);
+  const smsKey = process.env.SMSOFFICE_API_KEY;
+  const smsSender = process.env.SMSOFFICE_SENDER || 'helpme';
+  const otpSecret = process.env.OTP_HASH_SECRET || key; // falls back to anon key
+  const smsConfigured = Boolean(smsKey);
 
-  function vonageAuthHeader() {
-    const token = Buffer.from(`${vonageKey}:${vonageSecret}`).toString('base64');
-    return `Basic ${token}`;
-  }
-
-  async function vonageStartVerify(phoneE164) {
-    // Vonage expects E.164 without the leading "+"
-    const to = phoneE164.replace(/^\+/, '');
-    const fullUrl = 'https://api.nexmo.com/v2/verify';
-    const body = {
-      brand: vonageBrand,
-      code_length: 6,
-      workflow: [{ channel: 'sms', to }],
-    };
-    console.log('[auth] vonage ->', fullUrl, body);
-    const r = await fetch(fullUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: vonageAuthHeader(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
+  async function sendSms(phoneE164, text) {
+    // smsoffice.ge v2 expects E.164 without leading "+"
+    const destination = phoneE164.replace(/^\+/, '');
+    const fullUrl = 'https://smsoffice.ge/api/v2/send/';
+    const params = new URLSearchParams({
+      key: smsKey,
+      destination,
+      sender: smsSender,
+      content: text,
     });
-    const text = await r.text();
-    console.log('[auth] vonage <-', r.status, text.slice(0, 400));
+    console.log('[auth] sms ->', fullUrl, { destination, sender: smsSender });
+    const r = await fetch(`${fullUrl}?${params.toString()}`, { method: 'GET' });
+    const body = await r.text();
+    console.log('[auth] sms <-', r.status, body.slice(0, 400));
+    // smsoffice returns JSON like { Success: true, ... } or a numeric/text status
     let data;
-    try { data = JSON.parse(text); } catch { data = { message: text }; }
-    return { ok: r.ok, status: r.status, data };
+    try { data = JSON.parse(body); } catch { data = { raw: body }; }
+    const ok = r.ok && (data?.Success === true || data?.success === true || /success/i.test(data?.raw || ''));
+    return { ok, status: r.status, data };
   }
 
-  async function vonageCheckCode(requestId, code) {
-    const fullUrl = `https://api.nexmo.com/v2/verify/${encodeURIComponent(requestId)}`;
-    console.log('[auth] vonage check ->', fullUrl);
-    const r = await fetch(fullUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: vonageAuthHeader(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    });
-    const text = await r.text();
-    console.log('[auth] vonage check <-', r.status, text.slice(0, 400));
-    let data;
-    try { data = JSON.parse(text); } catch { data = { message: text }; }
-    return { ok: r.ok, status: r.status, data };
-  }
-
-  function vonageErrorMessage(data, fallback) {
-    if (!data) return fallback;
-    // Vonage v2 uses RFC 7807: { type, title, detail, ... }
-    return data.detail || data.title || data.error_text || data.message || fallback;
-  }
-
-  const { action, phone, code, intent, name, profile_image, verification_id } = req.body || {};
+  const { action, phone, code, intent, name, profile_image } = req.body || {};
   const cleanPhone = normalizePhone(phone);
 
   if (action === 'update_profile_image') {
@@ -148,9 +132,9 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Enter a valid phone number with country code (e.g. +995555123456)' });
   }
 
-  if (!vonageConfigured) {
+  if (!smsConfigured) {
     return res.status(500).json({
-      error: 'SMS verification not configured. Set VONAGE_API_KEY and VONAGE_API_SECRET.',
+      error: 'SMS provider not configured. Set SMSOFFICE_API_KEY.',
     });
   }
 
@@ -180,21 +164,45 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: 'No account found for this number' });
     }
 
-    const sent = await vonageStartVerify(cleanPhone);
-    if (!sent.ok || !sent.data?.request_id) {
-      return res.status(sent.status || 502).json({
-        error: vonageErrorMessage(sent.data, 'Could not send code. Try again.'),
+    // Rate limit: too many codes for this phone recently?
+    const recentSince = new Date(Date.now() - ABUSE_WINDOW_MS).toISOString();
+    const recent = await callSupabase(
+      `/rest/v1/otp_codes?phone=eq.${encodeURIComponent(cleanPhone)}&created_at=gte.${encodeURIComponent(recentSince)}&select=id`,
+      { headers: baseHeaders }
+    );
+    if (recent.ok && Array.isArray(recent.data) && recent.data.length >= MAX_CODES_PER_PHONE_PER_WINDOW) {
+      return res.status(429).json({ error: 'Too many code requests. Please wait a few minutes.' });
+    }
+
+    const codeStr = generateCode();
+    const code_hash = hashCode(codeStr, cleanPhone, otpSecret);
+    const expires_at = new Date(Date.now() + CODE_TTL_MS).toISOString();
+
+    const inserted = await callSupabase('/rest/v1/otp_codes', {
+      method: 'POST',
+      headers: { ...baseHeaders, Prefer: 'return=minimal' },
+      body: JSON.stringify({ phone: cleanPhone, code_hash, expires_at }),
+    });
+    if (!inserted.ok) {
+      return res.status(inserted.status).json({
+        error: supabaseError(inserted.data, 'Could not create code'),
+        supabase: inserted.data,
       });
     }
-    return res.json({ status: 'sent', verification_id: sent.data.request_id });
+
+    const sent = await sendSms(cleanPhone, `helpme code: ${codeStr}. Valid for 5 min.`);
+    if (!sent.ok) {
+      return res.status(502).json({
+        error: 'Could not send SMS. Try again.',
+        provider: sent.data,
+      });
+    }
+    return res.json({ status: 'sent' });
   }
 
   if (action === 'verify_code') {
     if (typeof code !== 'string' || !/^\d{4,10}$/.test(code.trim())) {
       return res.status(400).json({ error: 'Enter the code you received' });
-    }
-    if (typeof verification_id !== 'string' || !verification_id) {
-      return res.status(400).json({ error: 'Missing verification session — request a new code' });
     }
     const wantsRegister = intent === 'register';
     const wantsLogin = intent === 'login';
@@ -202,19 +210,57 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Unknown intent' });
     }
 
-    const checked = await vonageCheckCode(verification_id, code.trim());
-    if (!checked.ok) {
-      // Vonage returns 400 for wrong code, 410 when too many attempts, 404 expired
-      const msg =
-        checked.status === 400
-          ? 'Incorrect code'
-          : checked.status === 404
-          ? 'Code expired — request a new one'
-          : checked.status === 410
-          ? 'Too many attempts — request a new code'
-          : vonageErrorMessage(checked.data, 'Could not verify code');
-      return res.status(checked.status === 400 ? 401 : checked.status).json({ error: msg });
+    // Get the most recent non-consumed, non-expired code for this phone
+    const nowIso = new Date().toISOString();
+    const lookup = await callSupabase(
+      `/rest/v1/otp_codes?phone=eq.${encodeURIComponent(cleanPhone)}&consumed=is.false&expires_at=gte.${encodeURIComponent(nowIso)}&order=created_at.desc&limit=1`,
+      { headers: baseHeaders }
+    );
+    if (!lookup.ok) {
+      return res.status(lookup.status).json({
+        error: supabaseError(lookup.data, 'Could not check code'),
+        supabase: lookup.data,
+      });
     }
+    const row = Array.isArray(lookup.data) ? lookup.data[0] : null;
+    if (!row) {
+      return res.status(401).json({ error: 'Code expired — request a new one' });
+    }
+    if (row.attempts >= MAX_ATTEMPTS) {
+      // Burn the code so it can't be brute-forced further
+      await callSupabase(
+        `/rest/v1/otp_codes?id=eq.${row.id}`,
+        {
+          method: 'PATCH',
+          headers: baseHeaders,
+          body: JSON.stringify({ consumed: true }),
+        }
+      ).catch(() => {});
+      return res.status(429).json({ error: 'Too many attempts — request a new code' });
+    }
+
+    const expected = hashCode(code.trim(), cleanPhone, otpSecret);
+    if (expected !== row.code_hash) {
+      await callSupabase(
+        `/rest/v1/otp_codes?id=eq.${row.id}`,
+        {
+          method: 'PATCH',
+          headers: baseHeaders,
+          body: JSON.stringify({ attempts: (row.attempts || 0) + 1 }),
+        }
+      ).catch(() => {});
+      return res.status(401).json({ error: 'Incorrect code' });
+    }
+
+    // Code is good — burn it so it can't be replayed
+    await callSupabase(
+      `/rest/v1/otp_codes?id=eq.${row.id}`,
+      {
+        method: 'PATCH',
+        headers: baseHeaders,
+        body: JSON.stringify({ consumed: true }),
+      }
+    ).catch(() => {});
 
     if (wantsRegister) {
       const cleanName = typeof name === 'string' ? name.trim() : '';
@@ -249,12 +295,12 @@ module.exports = async function handler(req, res) {
           supabase: created.data,
         });
       }
-      const row = Array.isArray(created.data) ? created.data[0] : created.data;
+      const createdRow = Array.isArray(created.data) ? created.data[0] : created.data;
       return res.status(201).json({
-        id: row.id,
-        phone: row.phone,
-        name: row.name,
-        profile_image: row.profile_image || null,
+        id: createdRow.id,
+        phone: createdRow.phone,
+        name: createdRow.name,
+        profile_image: createdRow.profile_image || null,
       });
     }
 
@@ -269,13 +315,13 @@ module.exports = async function handler(req, res) {
         supabase: found.data,
       });
     }
-    const row = Array.isArray(found.data) ? found.data[0] : null;
-    if (!row) return res.status(404).json({ error: 'No account found for this number' });
+    const userRow = Array.isArray(found.data) ? found.data[0] : null;
+    if (!userRow) return res.status(404).json({ error: 'No account found for this number' });
     return res.json({
-      id: row.id,
-      phone: row.phone,
-      name: row.name,
-      profile_image: row.profile_image || null,
+      id: userRow.id,
+      phone: userRow.phone,
+      name: userRow.name,
+      profile_image: userRow.profile_image || null,
     });
   }
 

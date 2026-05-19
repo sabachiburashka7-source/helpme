@@ -46,7 +46,6 @@ export default function AuthScreen({ onAuthenticated }) {
   const [name, setName] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [code, setCode] = useState('');
-  const [verificationId, setVerificationId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
@@ -86,14 +85,12 @@ export default function AuthScreen({ onAuthenticated }) {
     setMode(next);
     setStep('details');
     setCode('');
-    setVerificationId('');
     setError('');
   }
 
   function backToDetails() {
     setStep('details');
     setCode('');
-    setVerificationId('');
     setError('');
   }
 
@@ -123,7 +120,6 @@ export default function AuthScreen({ onAuthenticated }) {
         setBusy(false);
         return;
       }
-      setVerificationId(data?.verification_id || '');
       setStep('code');
       setResendIn(RESEND_COOLDOWN_SECONDS);
       if (resend) setCode('');
@@ -150,7 +146,6 @@ export default function AuthScreen({ onAuthenticated }) {
           action: 'verify_code',
           phone: phone.trim(),
           code: trimmedCode,
-          verification_id: verificationId,
           intent: isRegister ? 'register' : 'login',
           name: isRegister ? name.trim() : undefined,
           profile_image: isRegister ? profileImage : undefined,
