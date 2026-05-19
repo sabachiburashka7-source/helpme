@@ -7,6 +7,7 @@ function normalizePhone(input) {
 }
 
 function isE164(phone) {
+  // Twilio Verify requires E.164: leading + and 8–15 digits total
   return /^\+\d{8,15}$/.test(phone);
 }
 
@@ -44,27 +45,32 @@ module.exports = async function handler(req, res) {
     'Content-Type': 'application/json',
   };
 
-  const firebaseApiKey = process.env.FIREBASE_API_KEY;
-  const firebaseProjectId = process.env.FIREBASE_PROJECT_ID;
+  const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+  const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+  const twilioVerifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
+  const twilioConfigured = Boolean(twilioSid && twilioToken && twilioVerifySid);
 
-  async function lookupFirebaseUser(idToken) {
-    // identitytoolkit accounts:lookup both validates the JWT and returns
-    // the user record. Replaces a full firebase-admin SDK dependency.
-    const fullUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(firebaseApiKey)}`;
-    console.log('[auth] firebase ->', fullUrl);
+  async function twilioVerify(path, params) {
+    const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
+    const body = new URLSearchParams(params).toString();
+    const fullUrl = `https://verify.twilio.com/v2/Services/${twilioVerifySid}${path}`;
+    console.log('[auth] twilio ->', fullUrl, params);
     const r = await fetch(fullUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idToken }),
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body,
     });
     const text = await r.text();
-    console.log('[auth] firebase <-', r.status, text.slice(0, 400));
+    console.log('[auth] twilio <-', r.status, text.slice(0, 400));
     let data;
     try { data = JSON.parse(text); } catch { data = { message: text }; }
     return { ok: r.ok, status: r.status, data };
   }
 
-  const { action, phone, intent, name, profile_image, id_token } = req.body || {};
+  const { action, phone, code, intent, name, profile_image } = req.body || {};
   const cleanPhone = normalizePhone(phone);
 
   if (action === 'update_profile_image') {
@@ -105,19 +111,23 @@ module.exports = async function handler(req, res) {
     return res.json({ id: row.id, phone: row.phone, name: row.name, profile_image: row.profile_image });
   }
 
-  // Cheap fail-fast check the client runs before Firebase sends an SMS:
-  // tell us whether the phone is already taken (for register) or unknown
-  // (for login). No verification involved — the real auth happens after
-  // Firebase confirms the OTP, via the firebase_auth action below.
-  if (action === 'check_phone') {
-    if (!isE164(cleanPhone)) {
-      return res.status(400).json({ error: 'Enter a valid phone number with country code (e.g. +995555123456)' });
-    }
+  if (!isE164(cleanPhone)) {
+    return res.status(400).json({ error: 'Enter a valid phone number with country code (e.g. +15551234567)' });
+  }
+
+  if (!twilioConfigured) {
+    return res.status(500).json({
+      error: 'SMS verification not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_VERIFY_SERVICE_SID.',
+    });
+  }
+
+  if (action === 'send_code') {
     const wantsRegister = intent === 'register';
     const wantsLogin = intent === 'login';
     if (!wantsRegister && !wantsLogin) {
       return res.status(400).json({ error: 'Unknown intent' });
     }
+
     const existing = await callSupabase(
       `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id`,
       { headers: baseHeaders }
@@ -129,23 +139,26 @@ module.exports = async function handler(req, res) {
       });
     }
     const userExists = Array.isArray(existing.data) && existing.data.length > 0;
+
     if (wantsRegister && userExists) {
       return res.status(409).json({ error: 'An account with this phone already exists' });
     }
     if (wantsLogin && !userExists) {
       return res.status(404).json({ error: 'No account found for this number' });
     }
-    return res.json({ status: 'ok' });
-  }
 
-  if (action === 'firebase_auth') {
-    if (!firebaseApiKey || !firebaseProjectId) {
-      return res.status(500).json({
-        error: 'Firebase not configured. Set FIREBASE_API_KEY and FIREBASE_PROJECT_ID.',
+    const sent = await twilioVerify('/Verifications', { To: cleanPhone, Channel: 'sms' });
+    if (!sent.ok) {
+      return res.status(sent.status).json({
+        error: sent.data?.message || 'Could not send code. Try again.',
       });
     }
-    if (typeof id_token !== 'string' || !id_token) {
-      return res.status(400).json({ error: 'Missing id_token' });
+    return res.json({ status: 'sent' });
+  }
+
+  if (action === 'verify_code') {
+    if (typeof code !== 'string' || !/^\d{4,10}$/.test(code.trim())) {
+      return res.status(400).json({ error: 'Enter the code you received' });
     }
     const wantsRegister = intent === 'register';
     const wantsLogin = intent === 'login';
@@ -153,19 +166,17 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Unknown intent' });
     }
 
-    const lookup = await lookupFirebaseUser(id_token);
-    if (!lookup.ok) {
-      const msg = lookup.data?.error?.message || lookup.data?.message || 'Token verification failed';
-      return res.status(401).json({ error: msg });
+    const checked = await twilioVerify('/VerificationCheck', {
+      To: cleanPhone,
+      Code: code.trim(),
+    });
+    if (!checked.ok) {
+      return res.status(checked.status).json({
+        error: checked.data?.message || 'Could not verify code',
+      });
     }
-    const firebaseUser = Array.isArray(lookup.data?.users) ? lookup.data.users[0] : null;
-    const verifiedPhone = firebaseUser?.phoneNumber;
-    if (!firebaseUser || !verifiedPhone) {
-      return res.status(401).json({ error: 'Token has no verified phone' });
-    }
-    const phoneFromToken = normalizePhone(verifiedPhone);
-    if (!isE164(phoneFromToken)) {
-      return res.status(400).json({ error: 'Verified phone is not in E.164 format' });
+    if (checked.data?.status !== 'approved') {
+      return res.status(401).json({ error: 'Incorrect or expired code' });
     }
 
     if (wantsRegister) {
@@ -173,7 +184,7 @@ module.exports = async function handler(req, res) {
       if (!cleanName) return res.status(400).json({ error: 'Enter your name' });
 
       const existing = await callSupabase(
-        `/rest/v1/users?phone=eq.${encodeURIComponent(phoneFromToken)}&select=id`,
+        `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id`,
         { headers: baseHeaders }
       );
       if (!existing.ok) {
@@ -186,7 +197,7 @@ module.exports = async function handler(req, res) {
         return res.status(409).json({ error: 'An account with this phone already exists' });
       }
 
-      const insertPayload = { phone: phoneFromToken, name: cleanName };
+      const insertPayload = { phone: cleanPhone, name: cleanName };
       if (typeof profile_image === 'string' && profile_image) {
         insertPayload.profile_image = profile_image;
       }
@@ -212,7 +223,7 @@ module.exports = async function handler(req, res) {
 
     // login
     const found = await callSupabase(
-      `/rest/v1/users?phone=eq.${encodeURIComponent(phoneFromToken)}&select=id,phone,name,profile_image`,
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id,phone,name,profile_image`,
       { headers: baseHeaders }
     );
     if (!found.ok) {
