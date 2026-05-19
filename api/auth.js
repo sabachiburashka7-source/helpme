@@ -7,7 +7,6 @@ function normalizePhone(input) {
 }
 
 function isE164(phone) {
-  // Twilio Verify requires E.164: leading + and 8–15 digits total
   return /^\+\d{8,15}$/.test(phone);
 }
 
@@ -45,32 +44,66 @@ module.exports = async function handler(req, res) {
     'Content-Type': 'application/json',
   };
 
-  const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-  const twilioToken = process.env.TWILIO_AUTH_TOKEN;
-  const twilioVerifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
-  const twilioConfigured = Boolean(twilioSid && twilioToken && twilioVerifySid);
+  const vonageKey = process.env.VONAGE_API_KEY;
+  const vonageSecret = process.env.VONAGE_API_SECRET;
+  const vonageBrand = process.env.VONAGE_BRAND || 'helpme';
+  const vonageConfigured = Boolean(vonageKey && vonageSecret);
 
-  async function twilioVerify(path, params) {
-    const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
-    const body = new URLSearchParams(params).toString();
-    const fullUrl = `https://verify.twilio.com/v2/Services/${twilioVerifySid}${path}`;
-    console.log('[auth] twilio ->', fullUrl, params);
+  function vonageAuthHeader() {
+    const token = Buffer.from(`${vonageKey}:${vonageSecret}`).toString('base64');
+    return `Basic ${token}`;
+  }
+
+  async function vonageStartVerify(phoneE164) {
+    // Vonage expects E.164 without the leading "+"
+    const to = phoneE164.replace(/^\+/, '');
+    const fullUrl = 'https://api.nexmo.com/v2/verify';
+    const body = {
+      brand: vonageBrand,
+      code_length: 6,
+      workflow: [{ channel: 'sms', to }],
+    };
+    console.log('[auth] vonage ->', fullUrl, body);
     const r = await fetch(fullUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: vonageAuthHeader(),
+        'Content-Type': 'application/json',
       },
-      body,
+      body: JSON.stringify(body),
     });
     const text = await r.text();
-    console.log('[auth] twilio <-', r.status, text.slice(0, 400));
+    console.log('[auth] vonage <-', r.status, text.slice(0, 400));
     let data;
     try { data = JSON.parse(text); } catch { data = { message: text }; }
     return { ok: r.ok, status: r.status, data };
   }
 
-  const { action, phone, code, intent, name, profile_image } = req.body || {};
+  async function vonageCheckCode(requestId, code) {
+    const fullUrl = `https://api.nexmo.com/v2/verify/${encodeURIComponent(requestId)}`;
+    console.log('[auth] vonage check ->', fullUrl);
+    const r = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: vonageAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code }),
+    });
+    const text = await r.text();
+    console.log('[auth] vonage check <-', r.status, text.slice(0, 400));
+    let data;
+    try { data = JSON.parse(text); } catch { data = { message: text }; }
+    return { ok: r.ok, status: r.status, data };
+  }
+
+  function vonageErrorMessage(data, fallback) {
+    if (!data) return fallback;
+    // Vonage v2 uses RFC 7807: { type, title, detail, ... }
+    return data.detail || data.title || data.error_text || data.message || fallback;
+  }
+
+  const { action, phone, code, intent, name, profile_image, verification_id } = req.body || {};
   const cleanPhone = normalizePhone(phone);
 
   if (action === 'update_profile_image') {
@@ -112,12 +145,12 @@ module.exports = async function handler(req, res) {
   }
 
   if (!isE164(cleanPhone)) {
-    return res.status(400).json({ error: 'Enter a valid phone number with country code (e.g. +15551234567)' });
+    return res.status(400).json({ error: 'Enter a valid phone number with country code (e.g. +995555123456)' });
   }
 
-  if (!twilioConfigured) {
+  if (!vonageConfigured) {
     return res.status(500).json({
-      error: 'SMS verification not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_VERIFY_SERVICE_SID.',
+      error: 'SMS verification not configured. Set VONAGE_API_KEY and VONAGE_API_SECRET.',
     });
   }
 
@@ -147,18 +180,21 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: 'No account found for this number' });
     }
 
-    const sent = await twilioVerify('/Verifications', { To: cleanPhone, Channel: 'sms' });
-    if (!sent.ok) {
-      return res.status(sent.status).json({
-        error: sent.data?.message || 'Could not send code. Try again.',
+    const sent = await vonageStartVerify(cleanPhone);
+    if (!sent.ok || !sent.data?.request_id) {
+      return res.status(sent.status || 502).json({
+        error: vonageErrorMessage(sent.data, 'Could not send code. Try again.'),
       });
     }
-    return res.json({ status: 'sent' });
+    return res.json({ status: 'sent', verification_id: sent.data.request_id });
   }
 
   if (action === 'verify_code') {
     if (typeof code !== 'string' || !/^\d{4,10}$/.test(code.trim())) {
       return res.status(400).json({ error: 'Enter the code you received' });
+    }
+    if (typeof verification_id !== 'string' || !verification_id) {
+      return res.status(400).json({ error: 'Missing verification session — request a new code' });
     }
     const wantsRegister = intent === 'register';
     const wantsLogin = intent === 'login';
@@ -166,17 +202,18 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Unknown intent' });
     }
 
-    const checked = await twilioVerify('/VerificationCheck', {
-      To: cleanPhone,
-      Code: code.trim(),
-    });
+    const checked = await vonageCheckCode(verification_id, code.trim());
     if (!checked.ok) {
-      return res.status(checked.status).json({
-        error: checked.data?.message || 'Could not verify code',
-      });
-    }
-    if (checked.data?.status !== 'approved') {
-      return res.status(401).json({ error: 'Incorrect or expired code' });
+      // Vonage returns 400 for wrong code, 410 when too many attempts, 404 expired
+      const msg =
+        checked.status === 400
+          ? 'Incorrect code'
+          : checked.status === 404
+          ? 'Code expired — request a new one'
+          : checked.status === 410
+          ? 'Too many attempts — request a new code'
+          : vonageErrorMessage(checked.data, 'Could not verify code');
+      return res.status(checked.status === 400 ? 401 : checked.status).json({ error: msg });
     }
 
     if (wantsRegister) {
