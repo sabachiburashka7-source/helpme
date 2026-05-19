@@ -9,6 +9,7 @@ import FadeInUp from '../components/FadeInUp';
 import { useTranslation } from '../components/i18n';
 import { isImageUrl } from '../components/profileImage';
 import { reverseGeocode, getCachedLocationName, isPinnedCoordinateString } from '../components/reverseGeocode';
+import { getCurrentLocation } from '../components/location';
 
 function useDisplayLocation(offer) {
   const hasCoords = offer && typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
@@ -218,30 +219,21 @@ export default function BrowseScreen({ dbOffers, loading }) {
     lastScrollY.current = y;
   };
 
-  function pickRadius(km) {
+  async function pickRadius(km) {
     setRadiusKm(km);
     if (km == null) return;
     if (userCoords) return;
-    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) {
-      setLocStatus('error');
-      setLocError(t('Geolocation not available'));
-      setRadiusKm(null);
-      return;
-    }
     setLocStatus('loading');
     setLocError('');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocStatus('granted');
-      },
-      (err) => {
-        setLocStatus('error');
-        setLocError(err.message || t('Could not get location'));
-        setRadiusKm(null);
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
-    );
+    try {
+      const coords = await getCurrentLocation({ highAccuracy: false });
+      setUserCoords({ lat: coords.latitude, lng: coords.longitude });
+      setLocStatus('granted');
+    } catch (err) {
+      setLocStatus('error');
+      setLocError(err?.message || t('Could not get location'));
+      setRadiusKm(null);
+    }
   }
 
   const allOffers = dbOffers.filter((o) => o.image);

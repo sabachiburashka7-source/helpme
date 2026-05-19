@@ -10,6 +10,8 @@ import MapPicker from '../components/MapPicker';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { pickProfileImage, pickOfferImages, isImageUrl } from '../components/profileImage';
 import { reverseGeocode } from '../components/reverseGeocode';
+import { apiUrl } from '../components/apiBase';
+import { getCurrentLocation } from '../components/location';
 
 const MAX_OFFER_IMAGES = 6;
 
@@ -265,25 +267,17 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
     });
   }
 
-  function detectLocation() {
-    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) {
-      setGpsStatus('error');
-      setGpsError('Geolocation is not available on this device');
-      return;
-    }
+  async function detectLocation() {
     setGpsStatus('loading');
     setGpsError('');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        applyPin(pos.coords.latitude, pos.coords.longitude);
-        setGpsStatus('success');
-      },
-      (err) => {
-        setGpsStatus('error');
-        setGpsError(err.message || 'Could not get location');
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+    try {
+      const coords = await getCurrentLocation();
+      applyPin(coords.latitude, coords.longitude);
+      setGpsStatus('success');
+    } catch (err) {
+      setGpsStatus('error');
+      setGpsError(err?.message || 'Could not get location');
+    }
   }
 
   function switchMode(mode) {
@@ -312,7 +306,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
   async function generateImage(id, description, category) {
     try {
-      const r = await fetch('/api/generate-image', {
+      const r = await fetch(apiUrl('/api/generate-image'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description, category, id }),

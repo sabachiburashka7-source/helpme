@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "helpme",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -12,18 +13,42 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "extra": {
+      "apiBaseUrl": "https://helpme-jade-tau.vercel.app"
+    },
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.sabachiburashka.helpme",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow helpme to use your location to show nearby requests."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow helpme to access your photos so you can attach images to your requests.",
+          "cameraPermission": "Allow helpme to use your camera to take photos for your requests."
+        }
+      ]
+    ]
   }
 }

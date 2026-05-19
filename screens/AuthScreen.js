@@ -9,6 +9,7 @@ import SegmentedTabs from '../components/SegmentedTabs';
 import FadeInUp from '../components/FadeInUp';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { pickProfileImage, isImageUrl } from '../components/profileImage';
+import { apiUrl } from '../components/apiBase';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -136,7 +137,7 @@ export default function AuthScreen({ onAuthenticated }) {
 
     setBusy(true);
     try {
-      const r = await fetch('/api/auth', {
+      const r = await fetch(apiUrl('/api/auth'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -170,7 +171,7 @@ export default function AuthScreen({ onAuthenticated }) {
 
     setBusy(true);
     try {
-      const r = await fetch('/api/auth', {
+      const r = await fetch(apiUrl('/api/auth'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

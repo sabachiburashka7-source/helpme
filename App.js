@@ -7,15 +7,16 @@ import MyRequestsScreen from './screens/MyRequestsScreen';
 import AuthScreen from './screens/AuthScreen';
 import { colors, radius } from './components/theme';
 import { I18nProvider, useTranslation } from './components/i18n';
+import * as Storage from './components/storage';
+import { apiUrl } from './components/apiBase';
 
 const Tab = createBottomTabNavigator();
 const STORAGE_KEY = 'helpme.user';
 let tempCounter = 0;
 
-function loadStoredUser() {
-  if (Platform.OS !== 'web') return null;
+async function loadStoredUser() {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = await Storage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -23,11 +24,9 @@ function loadStoredUser() {
 }
 
 function persistUser(user) {
-  if (Platform.OS !== 'web') return;
-  try {
-    if (user) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    else window.localStorage.removeItem(STORAGE_KEY);
-  } catch {}
+  // Fire-and-forget; we update state synchronously and let storage settle in the background.
+  if (user) Storage.setItem(STORAGE_KEY, JSON.stringify(user));
+  else Storage.removeItem(STORAGE_KEY);
 }
 
 export default function App() {
@@ -39,7 +38,8 @@ export default function App() {
 }
 
 function AppInner() {
-  const [user, setUser] = useState(() => loadStoredUser());
+  const [user, setUser] = useState(null);
+  const [userHydrated, setUserHydrated] = useState(false);
   const [dbOffers, setDbOffers] = useState([]);
   const [myOffers, setMyOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
@@ -47,10 +47,25 @@ function AppInner() {
   const isWeb = Platform.OS === 'web';
   const isWideScreen = isWeb && width > 480;
 
+  // Hydrate the persisted user once on mount. Async on native (AsyncStorage),
+  // resolves synchronously-ish on web (localStorage).
+  useEffect(() => {
+    let cancelled = false;
+    loadStoredUser().then((u) => {
+      if (!cancelled) {
+        setUser(u);
+        setUserHydrated(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     setOffersLoading(true);
-    fetch('/api/offers')
+    fetch(apiUrl('/api/offers'))
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -82,7 +97,7 @@ function AppInner() {
     setMyOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, profile_image: dataUrl || null } : o)));
     setDbOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, profile_image: dataUrl || null } : o)));
     try {
-      const r = await fetch('/api/auth', {
+      const r = await fetch(apiUrl('/api/auth'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,7 +130,7 @@ function AppInner() {
     setDbOffers((prev) => [localOffer, ...prev]);
 
     try {
-      const r = await fetch('/api/offers', {
+      const r = await fetch(apiUrl('/api/offers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(offerData),
@@ -136,7 +151,7 @@ function AppInner() {
     setMyOffers((prev) => prev.filter((o) => o.id !== id));
     setDbOffers((prev) => prev.filter((o) => o.id !== id));
     try {
-      await fetch('/api/offers', {
+      await fetch(apiUrl('/api/offers'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
@@ -150,7 +165,7 @@ function AppInner() {
 
     const { generatingImage, ...persistPatch } = patch;
     if (Object.keys(persistPatch).length > 0) {
-      fetch('/api/offers', {
+      fetch(apiUrl('/api/offers'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...persistPatch }),
@@ -221,7 +236,11 @@ function AppInner() {
     </NavigationContainer>
   );
 
-  const Content = user ? AppContent : AuthContent;
+  // While we read the persisted user from storage, render nothing on a
+  // background color so we don't briefly flash the auth screen.
+  const Content = !userHydrated
+    ? <View style={{ flex: 1, backgroundColor: colors.bg }} />
+    : user ? AppContent : AuthContent;
 
   if (isWideScreen) {
     return (

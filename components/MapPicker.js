@@ -7,6 +7,10 @@ const MAPLIBRE_JS = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/mapl
 const MAPLIBRE_CSS = `https://unpkg.com/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.css`;
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
+// =====================================================================
+// Web — MapLibre injected directly into the DOM (original implementation)
+// =====================================================================
+
 let loadPromise = null;
 function loadMapLibre() {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -45,12 +49,9 @@ function loadMapLibre() {
 }
 
 function buildMarkerElement(accent) {
-  // Outer element: MapLibre owns its `transform` (used for positioning).
-  // Do NOT modify outer's transform — that's what caused the pin to jump.
   const el = document.createElement('div');
   el.style.cssText = 'width: 26px; height: 26px; cursor: grab;';
 
-  // Inner element: visual look + press-scale feedback.
   const inner = document.createElement('div');
   inner.style.cssText = [
     'width: 100%',
@@ -78,13 +79,7 @@ function buildMarkerElement(accent) {
   return el;
 }
 
-export default function MapPicker({
-  latitude,
-  longitude,
-  onChange,
-  draggable = true,
-  height = 220,
-}) {
+function MapPickerWeb({ latitude, longitude, onChange, draggable, height }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -96,7 +91,6 @@ export default function MapPicker({
   }, [onChange]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
     let cancelled = false;
 
     loadMapLibre()
@@ -159,8 +153,6 @@ export default function MapPicker({
     }
   }, [latitude, longitude]);
 
-  if (Platform.OS !== 'web') return null;
-
   return (
     <View style={[styles.wrap, { height }]}>
       {error ? (
@@ -177,6 +169,164 @@ export default function MapPicker({
         })
       )}
     </View>
+  );
+}
+
+// =====================================================================
+// Native — same MapLibre, but rendered inside a WebView
+// =====================================================================
+
+function buildNativeHtml({ latitude, longitude, draggable, accent }) {
+  const safeLat = Number(latitude) || 0;
+  const safeLng = Number(longitude) || 0;
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<link rel="stylesheet" href="${MAPLIBRE_CSS}" />
+<script src="${MAPLIBRE_JS}"></script>
+<style>
+  html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; background: #eef0f4; }
+  .pin { width: 26px; height: 26px; border-radius: 50%;
+         background: ${accent}; border: 3px solid #fff;
+         box-shadow: 0 4px 10px rgba(0,0,0,0.28), 0 0 0 1px rgba(122,18,48,0.18);
+         box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  function post(msg) {
+    try {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+      }
+    } catch (e) {}
+  }
+  var map = new maplibregl.Map({
+    container: 'map',
+    style: '${STYLE_URL}',
+    center: [${safeLng}, ${safeLat}],
+    zoom: 14,
+    attributionControl: false,
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+  var el = document.createElement('div');
+  el.className = 'pin';
+  var marker = new maplibregl.Marker({ element: el, draggable: ${draggable ? 'true' : 'false'}, anchor: 'center' })
+    .setLngLat([${safeLng}, ${safeLat}])
+    .addTo(map);
+
+  ${draggable ? `
+  marker.on('dragend', function () {
+    var ll = marker.getLngLat();
+    post({ type: 'pin', lat: ll.lat, lng: ll.lng });
+  });
+  map.on('click', function (e) {
+    marker.setLngLat(e.lngLat);
+    post({ type: 'pin', lat: e.lngLat.lat, lng: e.lngLat.lng });
+  });` : ''}
+
+  // Allow the parent to move the pin programmatically without a full reload.
+  document.addEventListener('message', handleParentMsg);
+  window.addEventListener('message', handleParentMsg);
+  function handleParentMsg(ev) {
+    try {
+      var data = JSON.parse(ev.data);
+      if (data && data.type === 'setPin' && typeof data.lat === 'number' && typeof data.lng === 'number') {
+        marker.setLngLat([data.lng, data.lat]);
+        map.easeTo({ center: [data.lng, data.lat], duration: 350 });
+      }
+    } catch (e) {}
+  }
+  post({ type: 'ready' });
+</script>
+</body>
+</html>`;
+}
+
+function MapPickerNative({ latitude, longitude, onChange, draggable, height }) {
+  // Lazy-require so the web bundle never pulls in react-native-webview.
+  const { WebView } = require('react-native-webview');
+  const webRef = useRef(null);
+  const lastSentRef = useRef({ lat: latitude, lng: longitude });
+
+  // Keep the WebView pin in sync when the parent updates lat/lng.
+  useEffect(() => {
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
+    const { lat, lng } = lastSentRef.current;
+    if (Math.abs((lat ?? 0) - latitude) < 1e-7 && Math.abs((lng ?? 0) - longitude) < 1e-7) return;
+    lastSentRef.current = { lat: latitude, lng: longitude };
+    if (webRef.current) {
+      webRef.current.postMessage(JSON.stringify({ type: 'setPin', lat: latitude, lng: longitude }));
+    }
+  }, [latitude, longitude]);
+
+  const html = buildNativeHtml({
+    latitude,
+    longitude,
+    draggable,
+    accent: colors.accent,
+  });
+
+  function handleMessage(event) {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'pin' && typeof data.lat === 'number' && typeof data.lng === 'number') {
+        lastSentRef.current = { lat: data.lat, lng: data.lng };
+        onChange?.(data.lat, data.lng);
+      }
+    } catch {}
+  }
+
+  return (
+    <View style={[styles.wrap, { height }]}>
+      <WebView
+        ref={webRef}
+        originWhitelist={['*']}
+        source={{ html }}
+        onMessage={handleMessage}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        javaScriptEnabled
+        domStorageEnabled
+        scrollEnabled={false}
+      />
+    </View>
+  );
+}
+
+// =====================================================================
+// Entry point — picks the right implementation per platform.
+// =====================================================================
+
+export default function MapPicker({
+  latitude,
+  longitude,
+  onChange,
+  draggable = true,
+  height = 220,
+}) {
+  if (Platform.OS === 'web') {
+    return (
+      <MapPickerWeb
+        latitude={latitude}
+        longitude={longitude}
+        onChange={onChange}
+        draggable={draggable}
+        height={height}
+      />
+    );
+  }
+  return (
+    <MapPickerNative
+      latitude={latitude}
+      longitude={longitude}
+      onChange={onChange}
+      draggable={draggable}
+      height={height}
+    />
   );
 }
 
