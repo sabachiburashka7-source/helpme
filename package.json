@@ -20,6 +20,7 @@
     "expo": "~54.0.33",
     "expo-status-bar": "~3.0.9",
     "express": "^4.22.2",
+    "firebase": "^12.13.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
