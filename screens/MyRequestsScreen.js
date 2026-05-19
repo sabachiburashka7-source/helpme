@@ -219,7 +219,7 @@ function LoadingState() {
 
 export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onUpdateProfileImage }) {
   useEffect(() => { ensureKeyframes(); }, []);
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
@@ -260,7 +260,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
       longitude: lng,
       location: `Pinned location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
     }));
-    reverseGeocode(lat, lng).then((name) => {
+    reverseGeocode(lat, lng, lang).then((name) => {
       if (!name) return;
       setForm((f) => {
         if (f.latitude !== lat || f.longitude !== lng) return f;

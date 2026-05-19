@@ -1,8 +1,8 @@
 const cache = new Map();
 const inflight = new Map();
 
-function keyFor(lat, lng) {
-  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+function keyFor(lat, lng, lang) {
+  return `${lat.toFixed(4)},${lng.toFixed(4)},${lang || 'en'}`;
 }
 
 function composeName(address) {
@@ -25,18 +25,27 @@ function composeName(address) {
   return parts.length ? parts.slice(0, 2).join(', ') : null;
 }
 
-export function getCachedLocationName(lat, lng) {
+export function getCachedLocationName(lat, lng, lang) {
   if (typeof lat !== 'number' || typeof lng !== 'number') return null;
-  return cache.get(keyFor(lat, lng)) || null;
+  return cache.get(keyFor(lat, lng, lang)) || null;
 }
 
+const RAW_COORDS_RE = /^\s*\(?\s*-?\d{1,3}(?:\.\d+)?\s*,\s*-?\d{1,3}(?:\.\d+)?\s*\)?\s*$/;
+
+// True when the location text is just coordinates, with or without a wrapper
+// (e.g. "Pinned location (41.71, 44.83)", "(41.71, 44.83)", "41.71, 44.83").
+// Those are the cases where we should reverse-geocode to show a human address.
 export function isPinnedCoordinateString(s) {
-  return typeof s === 'string' && /^Pinned location \(/.test(s.trim());
+  if (typeof s !== 'string') return false;
+  const t = s.trim();
+  if (/^Pinned location\s*\(/i.test(t)) return true;
+  return RAW_COORDS_RE.test(t);
 }
 
-export async function reverseGeocode(lat, lng) {
+export async function reverseGeocode(lat, lng, lang = 'en') {
   if (typeof lat !== 'number' || typeof lng !== 'number') return null;
-  const key = keyFor(lat, lng);
+  const acceptLang = lang || 'en';
+  const key = keyFor(lat, lng, acceptLang);
   if (cache.has(key)) return cache.get(key);
   if (inflight.has(key)) return inflight.get(key);
 
@@ -48,7 +57,12 @@ export async function reverseGeocode(lat, lng) {
   const promise = (async () => {
     try {
       const r = await fetch(url, {
-        headers: { Accept: 'application/json', 'Accept-Language': 'en' },
+        headers: {
+          Accept: 'application/json',
+          'Accept-Language': acceptLang,
+          // Nominatim's usage policy asks every client to identify itself.
+          'User-Agent': 'helpme/1.0 (com.sabachiburashka.helpme)',
+        },
       });
       if (!r.ok) return null;
       const data = await r.json();

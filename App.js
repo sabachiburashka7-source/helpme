@@ -51,6 +51,7 @@ function AppInner() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isWideScreen = isWeb && width > 480;
+  const { t } = useTranslation();
 
   // Hydrate the persisted user once on mount. Async on native (AsyncStorage),
   // resolves synchronously-ish on web (localStorage).
@@ -210,7 +211,7 @@ function AppInner() {
                 focused && styles.tabLabelActive,
               ]}
             >
-              {route.name === 'Browse' ? 'Browse' : 'My requests'}
+              {route.name === 'Browse' ? t('Browse') : t('My requests')}
             </Text>
           ),
           tabBarIcon: ({ color, focused }) => (

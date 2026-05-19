@@ -15,10 +15,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapPicker from '../components/MapPicker';
 
 function useDisplayLocation(offer) {
+  const { lang } = useTranslation();
   const hasCoords = offer && typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
   const needsGeocode = hasCoords && isPinnedCoordinateString(offer?.location);
   const initial = needsGeocode
-    ? getCachedLocationName(offer.latitude, offer.longitude) || offer.location
+    ? getCachedLocationName(offer.latitude, offer.longitude, lang) || offer.location
     : offer?.location || '';
   const [name, setName] = useState(initial);
 
@@ -27,18 +28,18 @@ function useDisplayLocation(offer) {
       setName(offer?.location || '');
       return;
     }
-    const cached = getCachedLocationName(offer.latitude, offer.longitude);
+    const cached = getCachedLocationName(offer.latitude, offer.longitude, lang);
     if (cached) {
       setName(cached);
       return;
     }
     setName(offer.location);
     let alive = true;
-    reverseGeocode(offer.latitude, offer.longitude).then((n) => {
+    reverseGeocode(offer.latitude, offer.longitude, lang).then((n) => {
       if (alive && n) setName(n);
     });
     return () => { alive = false; };
-  }, [offer?.id, offer?.latitude, offer?.longitude, offer?.location, needsGeocode]);
+  }, [offer?.id, offer?.latitude, offer?.longitude, offer?.location, needsGeocode, lang]);
 
   return name;
 }

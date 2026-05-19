@@ -1,8 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, transitions } from './theme';
+import * as Storage from './storage';
 
 const STORAGE_KEY = 'helpme.lang';
+const DEFAULT_LANG = 'ka';
 
 export const LANGUAGES = [
   { code: 'en', label: 'EN', name: 'English' },
@@ -105,6 +107,7 @@ const dict = {
     'Photos (optional)': 'Фото (необязательно)',
     'Add photos': 'Добавить фото',
     'Remove photo': 'Удалить фото',
+    'My requests': 'Мои запросы',
   },
   ka: {
     // common
@@ -198,36 +201,37 @@ const dict = {
     'Photos (optional)': 'ფოტოები (არასავალდებულო)',
     'Add photos': 'ფოტოს დამატება',
     'Remove photo': 'ფოტოს წაშლა',
+    'My requests': 'ჩემი მოთხოვნები',
   },
 };
 
 const I18nContext = createContext({
-  lang: 'en',
+  lang: DEFAULT_LANG,
   setLang: () => {},
   t: (s) => s,
 });
 
-function detectInitialLang() {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return 'en';
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored && dict[stored] !== undefined) return stored;
-    if (stored === 'en') return 'en';
-  } catch {}
-  const nav = typeof navigator !== 'undefined' ? (navigator.language || '').toLowerCase() : '';
-  if (nav.startsWith('ru')) return 'ru';
-  if (nav.startsWith('ka')) return 'ka';
-  return 'en';
+function isSupportedLang(code) {
+  return code === 'en' || dict[code] !== undefined;
 }
 
 export function I18nProvider({ children }) {
-  const [lang, setLangState] = useState(() => detectInitialLang());
+  // New users start in Georgian. Returning users get their saved choice once
+  // AsyncStorage resolves (briefly after mount).
+  const [lang, setLangState] = useState(DEFAULT_LANG);
+
+  useEffect(() => {
+    let cancelled = false;
+    Storage.getItem(STORAGE_KEY).then((stored) => {
+      if (cancelled) return;
+      if (stored && isSupportedLang(stored)) setLangState(stored);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const setLang = useCallback((next) => {
     setLangState(next);
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      try { window.localStorage.setItem(STORAGE_KEY, next); } catch {}
-    }
+    Storage.setItem(STORAGE_KEY, next);
   }, []);
 
   const t = useCallback(
