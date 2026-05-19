@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Animated, Easing,
   KeyboardAvoidingView, Platform, ScrollView, Pressable,
@@ -10,7 +10,9 @@ import FadeInUp from '../components/FadeInUp';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { pickProfileImage, isImageUrl } from '../components/profileImage';
 
-function Field({ label, focused, ...inputProps }) {
+const RESEND_COOLDOWN_SECONDS = 30;
+
+function Field({ label, ...inputProps }) {
   const [isFocused, setFocused] = useState(false);
   return (
     <View style={fieldStyles.wrap}>
@@ -39,25 +41,25 @@ function Field({ label, focused, ...inputProps }) {
 export default function AuthScreen({ onAuthenticated }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState('login');
+  const [step, setStep] = useState('details'); // 'details' | 'code'
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [profileImage, setProfileImage] = useState(null);
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  async function chooseProfileImage() {
-    try {
-      const dataUrl = await pickProfileImage();
-      if (dataUrl) setProfileImage(dataUrl);
-    } catch (err) {
-      flashError(err?.message || t('Could not upload image'));
-    }
-  }
+  const [resendIn, setResendIn] = useState(0);
 
   const isRegister = mode === 'register';
-
   const errAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (resendIn <= 0) return undefined;
+    const id = setInterval(() => {
+      setResendIn((n) => (n <= 1 ? 0 : n - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [resendIn]);
 
   function flashError(msg) {
     setError(msg);
@@ -70,10 +72,35 @@ export default function AuthScreen({ onAuthenticated }) {
     ]).start();
   }
 
-  async function submit() {
+  async function chooseProfileImage() {
+    try {
+      const dataUrl = await pickProfileImage();
+      if (dataUrl) setProfileImage(dataUrl);
+    } catch (err) {
+      flashError(err?.message || t('Could not upload image'));
+    }
+  }
+
+  function switchMode(next) {
+    setMode(next);
+    setStep('details');
+    setCode('');
     setError('');
-    if (!phone.trim()) return flashError(t('Enter your phone number'));
-    if (!password) return flashError(t('Enter your password'));
+  }
+
+  function backToDetails() {
+    setStep('details');
+    setCode('');
+    setError('');
+  }
+
+  async function sendCode({ resend = false } = {}) {
+    setError('');
+    const trimmedPhone = phone.trim();
+    if (!trimmedPhone) return flashError(t('Enter your phone number'));
+    if (!trimmedPhone.startsWith('+')) {
+      return flashError(t('Include country code, e.g. +1 555 123 4567'));
+    }
     if (isRegister && !name.trim()) return flashError(t('Enter your name'));
 
     setBusy(true);
@@ -82,10 +109,45 @@ export default function AuthScreen({ onAuthenticated }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: isRegister ? 'register' : 'login',
+          action: 'send_code',
+          phone: trimmedPhone,
+          intent: isRegister ? 'register' : 'login',
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        flashError(data?.error || t('Something went wrong'));
+        setBusy(false);
+        return;
+      }
+      setStep('code');
+      setResendIn(RESEND_COOLDOWN_SECONDS);
+      if (resend) setCode('');
+    } catch {
+      flashError(t('Network error. Try again.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode() {
+    setError('');
+    const trimmedCode = code.trim();
+    if (!trimmedCode || trimmedCode.length < 4) {
+      return flashError(t('Enter the code you received'));
+    }
+
+    setBusy(true);
+    try {
+      const r = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify_code',
           phone: phone.trim(),
-          password,
-          name: name.trim(),
+          code: trimmedCode,
+          intent: isRegister ? 'register' : 'login',
+          name: isRegister ? name.trim() : undefined,
           profile_image: isRegister ? profileImage : undefined,
         }),
       });
@@ -100,11 +162,6 @@ export default function AuthScreen({ onAuthenticated }) {
       flashError(t('Network error. Try again.'));
       setBusy(false);
     }
-  }
-
-  function switchMode(next) {
-    setMode(next);
-    setError('');
   }
 
   return (
@@ -125,89 +182,120 @@ export default function AuthScreen({ onAuthenticated }) {
             <View style={styles.logoDot} />
             <Text style={styles.brand}>helpme</Text>
             <Text style={styles.tagline}>
-              {isRegister
+              {step === 'code'
+                ? t('We sent a code to {phone}').replace('{phone}', phone.trim())
+                : isRegister
                 ? t('Create your account in seconds')
                 : t('Welcome back — sign in to continue')}
             </Text>
           </View>
         </FadeInUp>
 
-        <FadeInUp delay={80}>
-          <View style={styles.tabsWrap}>
-            <SegmentedTabs
-              tabs={[
-                { value: 'login', label: t('Sign In') },
-                { value: 'register', label: t('Register') },
-              ]}
-              value={mode}
-              onChange={switchMode}
-            />
-          </View>
-        </FadeInUp>
+        {step === 'details' && (
+          <FadeInUp delay={80}>
+            <View style={styles.tabsWrap}>
+              <SegmentedTabs
+                tabs={[
+                  { value: 'login', label: t('Sign In') },
+                  { value: 'register', label: t('Register') },
+                ]}
+                value={mode}
+                onChange={switchMode}
+              />
+            </View>
+          </FadeInUp>
+        )}
 
         <FadeInUp delay={140}>
           <View style={styles.form}>
-            {isRegister && (
+            {step === 'details' ? (
               <>
-                <View style={styles.avatarRow}>
-                  <Pressable
-                    onPress={chooseProfileImage}
-                    style={({ hovered }) => [
-                      styles.avatarPick,
-                      Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
-                      hovered && { opacity: 0.92 },
-                    ]}
-                  >
-                    {isImageUrl(profileImage) ? (
-                      <View
-                        style={[
-                          styles.avatarImage,
-                          Platform.OS === 'web'
-                            ? {
-                                backgroundImage: `url("${profileImage}")`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                              }
-                            : null,
+                {isRegister && (
+                  <>
+                    <View style={styles.avatarRow}>
+                      <Pressable
+                        onPress={chooseProfileImage}
+                        style={({ hovered }) => [
+                          styles.avatarPick,
+                          Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                          hovered && { opacity: 0.92 },
                         ]}
-                      />
-                    ) : (
-                      <Text style={styles.avatarPickPlus}>+</Text>
-                    )}
-                  </Pressable>
-                  <Text style={styles.avatarHint}>
-                    {profileImage ? t('Tap to change photo') : t('Add profile photo (optional)')}
-                  </Text>
-                </View>
+                      >
+                        {isImageUrl(profileImage) ? (
+                          <View
+                            style={[
+                              styles.avatarImage,
+                              Platform.OS === 'web'
+                                ? {
+                                    backgroundImage: `url("${profileImage}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                  }
+                                : null,
+                            ]}
+                          />
+                        ) : (
+                          <Text style={styles.avatarPickPlus}>+</Text>
+                        )}
+                      </Pressable>
+                      <Text style={styles.avatarHint}>
+                        {profileImage ? t('Tap to change photo') : t('Add profile photo (optional)')}
+                      </Text>
+                    </View>
+                    <Field
+                      label={t('Name')}
+                      placeholder={t('Your name')}
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="words"
+                    />
+                  </>
+                )}
+
                 <Field
-                  label={t('Name')}
-                  placeholder={t('Your name')}
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
+                  label={t('Phone')}
+                  placeholder="+1 555 123 4567"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
+
+                <Text style={styles.helperText}>
+                  {t('We’ll text you a one-time code to sign in. No password needed.')}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Field
+                  label={t('Verification code')}
+                  placeholder="123456"
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={10}
+                />
+
+                <Pressable
+                  onPress={() => resendIn === 0 && !busy && sendCode({ resend: true })}
+                  disabled={resendIn > 0 || busy}
+                  style={({ hovered }) => [
+                    styles.resendRow,
+                    Platform.OS === 'web' && { transition: transitions.fast, cursor: resendIn === 0 ? 'pointer' : 'default' },
+                    hovered && resendIn === 0 && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={styles.resendText}>
+                    {resendIn > 0
+                      ? t('Resend code in {n}s').replace('{n}', String(resendIn))
+                      : t("Didn't get the code? Resend")}
+                  </Text>
+                </Pressable>
               </>
             )}
-
-            <Field
-              label={t('Phone')}
-              placeholder="+1 555-1234"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-
-            <Field
-              label={t('Password')}
-              placeholder={t('Min. 4 characters')}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
 
             <Animated.View
               style={{
@@ -232,28 +320,54 @@ export default function AuthScreen({ onAuthenticated }) {
             </Animated.View>
 
             <View style={{ height: 24 }} />
-            <Button
-              title={isRegister ? t('Create account') : t('Sign in')}
-              onPress={submit}
-              loading={busy}
-              size="lg"
-            />
 
-            <Pressable
-              onPress={() => switchMode(isRegister ? 'login' : 'register')}
-              style={({ hovered }) => [
-                styles.switchRow,
-                Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
-                hovered && { opacity: 0.7 },
-              ]}
-            >
-              <Text style={styles.switchText}>
-                {isRegister ? t('Already have an account? ') : t('New here? ')}
-                <Text style={styles.switchTextStrong}>
-                  {isRegister ? t('Sign in') : t('Create one')}
+            {step === 'details' ? (
+              <Button
+                title={isRegister ? t('Send code') : t('Send code')}
+                onPress={() => sendCode()}
+                loading={busy}
+                size="lg"
+              />
+            ) : (
+              <Button
+                title={isRegister ? t('Create account') : t('Sign in')}
+                onPress={verifyCode}
+                loading={busy}
+                size="lg"
+              />
+            )}
+
+            {step === 'code' ? (
+              <Pressable
+                onPress={backToDetails}
+                style={({ hovered }) => [
+                  styles.switchRow,
+                  Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                  hovered && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={styles.switchText}>
+                  {t('Wrong number? ')}
+                  <Text style={styles.switchTextStrong}>{t('Change it')}</Text>
                 </Text>
-              </Text>
-            </Pressable>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => switchMode(isRegister ? 'login' : 'register')}
+                style={({ hovered }) => [
+                  styles.switchRow,
+                  Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
+                  hovered && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={styles.switchText}>
+                  {isRegister ? t('Already have an account? ') : t('New here? ')}
+                  <Text style={styles.switchTextStrong}>
+                    {isRegister ? t('Sign in') : t('Create one')}
+                  </Text>
+                </Text>
+              </Pressable>
+            )}
           </View>
         </FadeInUp>
       </ScrollView>
@@ -286,6 +400,16 @@ const styles = StyleSheet.create({
   tabsWrap: { marginBottom: 8 },
 
   form: { paddingTop: 8 },
+
+  helperText: {
+    marginTop: 12,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+
+  resendRow: { alignItems: 'center', marginTop: 14, paddingVertical: 6 },
+  resendText: { fontSize: 13, color: colors.accent, fontWeight: '600' },
 
   errBox: {
     backgroundColor: colors.dangerSoft,
