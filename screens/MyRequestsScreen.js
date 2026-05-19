@@ -9,6 +9,7 @@ import FadeInUp from '../components/FadeInUp';
 import MapPicker from '../components/MapPicker';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { pickProfileImage, pickOfferImages, isImageUrl } from '../components/profileImage';
+import { reverseGeocode } from '../components/reverseGeocode';
 
 const MAX_OFFER_IMAGES = 6;
 
@@ -248,6 +249,22 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
     setForm((f) => ({ ...f, images: (f.images || []).filter((_, i) => i !== idx) }));
   }
 
+  function applyPin(lat, lng) {
+    setForm((f) => ({
+      ...f,
+      latitude: lat,
+      longitude: lng,
+      location: `Pinned location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+    }));
+    reverseGeocode(lat, lng).then((name) => {
+      if (!name) return;
+      setForm((f) => {
+        if (f.latitude !== lat || f.longitude !== lng) return f;
+        return { ...f, location: name };
+      });
+    });
+  }
+
   function detectLocation() {
     if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) {
       setGpsStatus('error');
@@ -258,14 +275,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
     setGpsError('');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setForm((f) => ({
-          ...f,
-          latitude: lat,
-          longitude: lng,
-          location: `Pinned location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-        }));
+        applyPin(pos.coords.latitude, pos.coords.longitude);
         setGpsStatus('success');
       },
       (err) => {
@@ -509,19 +519,12 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                         <MapPicker
                           latitude={form.latitude}
                           longitude={form.longitude}
-                          onChange={(lat, lng) =>
-                            setForm((f) => ({
-                              ...f,
-                              latitude: lat,
-                              longitude: lng,
-                              location: `Pinned location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
-                            }))
-                          }
+                          onChange={(lat, lng) => applyPin(lat, lng)}
                           height={220}
                         />
                         <View style={locStyles.gpsFooter}>
-                          <Text style={locStyles.gpsCoords}>
-                            {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+                          <Text style={locStyles.gpsCoords} numberOfLines={1}>
+                            {form.location}
                           </Text>
                           <Pressable onPress={detectLocation} style={locStyles.gpsRefresh}>
                             <Text style={locStyles.gpsRefreshText}>{t('Re-detect')}</Text>

@@ -8,6 +8,36 @@ import { Button, PressableScale } from '../components/Button';
 import FadeInUp from '../components/FadeInUp';
 import { useTranslation } from '../components/i18n';
 import { isImageUrl } from '../components/profileImage';
+import { reverseGeocode, getCachedLocationName, isPinnedCoordinateString } from '../components/reverseGeocode';
+
+function useDisplayLocation(offer) {
+  const hasCoords = offer && typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
+  const needsGeocode = hasCoords && isPinnedCoordinateString(offer?.location);
+  const initial = needsGeocode
+    ? getCachedLocationName(offer.latitude, offer.longitude) || offer.location
+    : offer?.location || '';
+  const [name, setName] = useState(initial);
+
+  useEffect(() => {
+    if (!needsGeocode) {
+      setName(offer?.location || '');
+      return;
+    }
+    const cached = getCachedLocationName(offer.latitude, offer.longitude);
+    if (cached) {
+      setName(cached);
+      return;
+    }
+    setName(offer.location);
+    let alive = true;
+    reverseGeocode(offer.latitude, offer.longitude).then((n) => {
+      if (alive && n) setName(n);
+    });
+    return () => { alive = false; };
+  }, [offer?.id, offer?.latitude, offer?.longitude, offer?.location, needsGeocode]);
+
+  return name;
+}
 
 const KEYFRAMES_ID = 'live-gradient-keyframes-browse';
 function ensureKeyframes() {
@@ -490,6 +520,7 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
 
 function OfferCard({ offer, onPress }) {
   const { t } = useTranslation();
+  const displayLocation = useDisplayLocation(offer);
   return (
     <PressableScale onPress={onPress} hoverLift style={styles.cardWrap}>
       <View style={styles.card}>
@@ -513,7 +544,7 @@ function OfferCard({ offer, onPress }) {
           <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
           <View style={styles.cardBottomRow}>
             <Text style={styles.cardName}>{offer.name}</Text>
-            <Text style={styles.cardLoc} numberOfLines={1}>{offer.location}</Text>
+            <Text style={styles.cardLoc} numberOfLines={1}>{displayLocation}</Text>
           </View>
         </View>
       </View>
@@ -672,8 +703,9 @@ function DetailsModal({ offer, onClose }) {
     });
   }, [open, offer, opacity, scale]);
 
-  if (!renderOffer && !open) return null;
   const data = offer || renderOffer;
+  const displayLocation = useDisplayLocation(data);
+  if (!renderOffer && !open) return null;
   if (!data) return null;
 
   return (
@@ -681,80 +713,92 @@ function DetailsModal({ offer, onClose }) {
       <Animated.View style={[styles.modalBackdrop, { opacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <Animated.View style={[styles.modalCard, { transform: [{ scale }] }]}>
-          <View
-            style={[
-              styles.modalImage,
-              { backgroundImage: imageUrlFor(data), backgroundSize: imageSizeFor(data) },
-            ]}
-          />
-
-          <View style={styles.modalBody}>
-            <View style={styles.modalHeaderRow}>
-              <View style={styles.avatar}>
-                {isImageUrl(data.profile_image) ? (
-                  <View
-                    style={[
-                      styles.avatarImage,
-                      Platform.OS === 'web'
-                        ? {
-                            backgroundImage: `url("${data.profile_image}")`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                          }
-                        : null,
-                    ]}
-                  />
-                ) : (
-                  <Text style={styles.avatarPlus}>+</Text>
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.modalName}>{data.name}</Text>
-                <Text style={styles.modalSub}>{data.location}</Text>
-              </View>
-              <Text style={styles.modalPrice}>${data.price}</Text>
-            </View>
-
-            <Text style={styles.modalDesc}>{data.description}</Text>
-
-            <OfferMap offer={data} t={t} />
-
-            <View style={styles.detailGroup}>
-              <View style={[styles.detailRow, styles.detailRowLast]}>
-                <Text style={styles.detailLabel}>{t('Number')}</Text>
-                <Text style={styles.detailValue}>{data.phone}</Text>
-              </View>
-            </View>
-
-            {Array.isArray(data.images) && data.images.length > 0 ? (
-              <View style={styles.photoGrid}>
-                {data.images.map((src, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.photoTile,
-                      Platform.OS === 'web'
-                        ? {
-                            backgroundImage: `url("${src}")`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                          }
-                        : null,
-                    ]}
-                  />
-                ))}
-              </View>
-            ) : null}
-
-            <View style={{ height: 16 }} />
-            <Button
-              title={t('Call now')}
-              size="lg"
-              onPress={() => Linking.openURL(`tel:${data.phone}`)}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View
+              style={[
+                styles.modalImage,
+                { backgroundImage: imageUrlFor(data), backgroundSize: imageSizeFor(data) },
+              ]}
             />
-            <View style={{ height: 4 }} />
-            <Button title={t('Close')} variant="ghost" size="md" onPress={onClose} />
-          </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.modalHeaderRow}>
+                <View style={styles.avatar}>
+                  {isImageUrl(data.profile_image) ? (
+                    <View
+                      style={[
+                        styles.avatarImage,
+                        Platform.OS === 'web'
+                          ? {
+                              backgroundImage: `url("${data.profile_image}")`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                            }
+                          : null,
+                      ]}
+                    />
+                  ) : (
+                    <Text style={styles.avatarPlus}>+</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalName}>{data.name}</Text>
+                  <Text style={styles.modalSub}>{displayLocation}</Text>
+                </View>
+                <Text style={styles.modalPrice}>${data.price}</Text>
+              </View>
+
+              <Text style={styles.modalDesc}>{data.description}</Text>
+
+              <View style={styles.detailGroup}>
+                <View style={[styles.detailRow, styles.detailRowLast]}>
+                  <Text style={styles.detailLabel}>{t('Number')}</Text>
+                  <Text style={styles.detailValue}>{data.phone}</Text>
+                </View>
+              </View>
+
+              <OfferMap offer={data} t={t} />
+
+              <View style={{ height: 16 }} />
+              <Button
+                title={t('Call now')}
+                size="lg"
+                onPress={() => Linking.openURL(`tel:${data.phone}`)}
+              />
+              <View style={{ height: 4 }} />
+              <Button title={t('Close')} variant="ghost" size="md" onPress={onClose} />
+
+              {Array.isArray(data.images) && data.images.length > 0 ? (
+                <View style={styles.photoStripWrap}>
+                  <Text style={styles.photoStripLabel}>{t('Photos')}</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.photoStripContent}
+                  >
+                    {data.images.map((src, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.photoStripTile,
+                          Platform.OS === 'web'
+                            ? {
+                                backgroundImage: `url("${src}")`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                              }
+                            : null,
+                        ]}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+            </View>
+          </ScrollView>
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -973,11 +1017,15 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
+    maxHeight: '90%',
     backgroundColor: colors.surface,
     borderRadius: 22,
     overflow: 'hidden',
     ...shadows.cardHover,
     shadowOpacity: 0.3,
+  },
+  modalScrollContent: {
+    paddingBottom: 0,
   },
   modalImage: {
     width: '100%',
@@ -1081,19 +1129,35 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   detailRowLast: { borderBottomWidth: 0 },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 12,
+  photoStripWrap: {
+    marginTop: 20,
+    marginHorizontal: -20,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
-  photoTile: {
-    width: '32%',
-    aspectRatio: 1,
+  photoStripLabel: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontWeight: '700',
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  photoStripContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+    gap: 10,
+  },
+  photoStripTile: {
+    width: 160,
+    height: 160,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
+    marginRight: 10,
   },
   detailLabel: {
     fontSize: 11,
