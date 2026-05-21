@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import {
-  Animated, Pressable, StyleSheet, Text, View, ActivityIndicator, Platform,
+  Animated, Pressable, StyleSheet, Text, View, ActivityIndicator,
 } from 'react-native';
-import { colors, radius, shadows, transitions } from './theme';
+import { colors, radius, shadows } from './theme';
 
 const SCALE_PRESSED = 0.97;
 const SCALE_REST = 1;
@@ -66,7 +66,6 @@ export function Button({
           isGhost && styles.ghost,
           isGhost && hovered && styles.ghostHover,
           (disabled || loading) && styles.disabled,
-          Platform.OS === 'web' && { transition: transitions.fast, cursor: disabled ? 'not-allowed' : 'pointer' },
         ]}
       >
         {loading ? (
@@ -104,7 +103,6 @@ export function IconButton({ children, onPress, style, hoverStyle, activeBg }) {
           styles.iconBtn,
           activeBg && { backgroundColor: activeBg },
           hovered && (hoverStyle || styles.iconBtnHover),
-          Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
         ]}
       >
         {children}
@@ -141,7 +139,6 @@ export function PressableScale({ children, onPress, style, hoverLift = false }) 
           hoverLift &&
           Animated.timing(lift, { toValue: 0, duration: 180, useNativeDriver: true }).start()
         }
-        style={Platform.OS === 'web' ? { transition: transitions.fast, cursor: 'pointer' } : undefined}
       >
         {children}
       </Pressable>

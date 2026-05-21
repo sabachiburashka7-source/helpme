@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, Modal, Animated, Easing,
-  StyleSheet, Linking, TextInput, Pressable, Platform,
+  StyleSheet, Linking, TextInput, Pressable,
 } from 'react-native';
-import { colors, radius, shadows, transitions, typography } from '../components/theme';
+import { colors, radius, shadows, typography } from '../components/theme';
 import { Button, PressableScale } from '../components/Button';
 import FadeInUp from '../components/FadeInUp';
 import { useTranslation } from '../components/i18n';
@@ -44,116 +44,9 @@ function useDisplayLocation(offer) {
   return name;
 }
 
-const KEYFRAMES_ID = 'live-gradient-keyframes-browse';
-function ensureKeyframes() {
-  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-  if (document.getElementById(KEYFRAMES_ID)) return;
-  const tag = document.createElement('style');
-  tag.id = KEYFRAMES_ID;
-  tag.textContent = `
-    @keyframes liveGradient {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-  `;
-  document.head.appendChild(tag);
-}
-
-const SAND_FILTER_ID = 'helpme-sand-dissolve';
-const SAND_ALPHA_ID = 'helpme-sand-dissolve-alpha';
-const SAND_SVG_ID = 'helpme-sand-dissolve-svg';
-
-function ensureSandFilter() {
-  if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-  if (document.getElementById(SAND_SVG_ID)) return;
-  const host = document.createElement('div');
-  host.id = SAND_SVG_ID;
-  host.setAttribute('aria-hidden', 'true');
-  host.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
-  host.innerHTML =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0">' +
-      '<defs>' +
-        '<filter id="' + SAND_FILTER_ID + '" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">' +
-          '<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="11" stitchTiles="stitch" result="noise"/>' +
-          '<feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0" result="mask"/>' +
-          '<feComponentTransfer in="mask" result="threshold">' +
-            '<feFuncA id="' + SAND_ALPHA_ID + '" type="linear" slope="1" intercept="1"/>' +
-          '</feComponentTransfer>' +
-          '<feComposite in="SourceGraphic" in2="threshold" operator="in"/>' +
-        '</filter>' +
-      '</defs>' +
-    '</svg>';
-  document.body.appendChild(host);
-}
-
-const NOISE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.7 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>';
-const NOISE_URL = Platform.OS === 'web'
-  ? `url("data:image/svg+xml;utf8,${encodeURIComponent(NOISE_SVG)}")`
-  : null;
-
-const liveDark = Platform.OS === 'web'
-  ? {
-      backgroundImage:
-        'linear-gradient(120deg, #2A040F 0%, #5A0E25 25%, #9C2A4C 50%, #5A0E25 75%, #2A040F 100%)',
-      backgroundSize: '300% 300%',
-      animation: 'liveGradient 8s ease-in-out infinite',
-    }
-  : { backgroundColor: '#7A1230' };
-
-const SVG_BY_CATEGORY = {
-  Moving: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
-    <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
-      <rect x='40' y='80' width='90' height='80'/>
-      <path d='M40 105 L130 105'/>
-      <path d='M85 80 L85 105'/>
-      <path d='M150 120 L245 120'/>
-      <path d='M225 105 L245 120 L225 135'/>
-      <rect x='260' y='80' width='22' height='80' stroke-dasharray='5 5'/>
-    </g>
-  </svg>`,
-  Assembly: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
-    <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
-      <path d='M60 160 L160 80'/>
-      <path d='M55 165 L70 150 L80 160 L65 175 Z'/>
-      <path d='M150 70 L175 55 L200 55 L210 75 L195 90 L170 90 Z'/>
-      <polygon points='225,80 250,80 263,103 250,125 225,125 212,103'/>
-      <circle cx='237.5' cy='102.5' r='5'/>
-    </g>
-  </svg>`,
-  Home: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
-    <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
-      <path d='M40 170 L280 170'/>
-      <path d='M80 90 L160 40 L240 90'/>
-      <path d='M100 90 L100 170'/>
-      <path d='M220 90 L220 170'/>
-      <rect x='140' y='115' width='40' height='55'/>
-      <circle cx='173' cy='143' r='2'/>
-    </g>
-  </svg>`,
-  Other: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
-    <rect width='320' height='200' fill='#fff'/>
-    <g fill='none' stroke='#7A1230' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'>
-      <circle cx='100' cy='75' r='20'/>
-      <path d='M100 95 L100 155'/>
-      <path d='M100 115 L72 145'/>
-      <path d='M100 115 L140 115'/>
-      <path d='M100 155 L80 185'/>
-      <path d='M100 155 L120 185'/>
-      <path d='M170 120 L200 150 L255 75'/>
-    </g>
-  </svg>`,
-};
-
-function imageUrlFor(offer) {
-  if (offer.image) return `url("${offer.image}")`;
-  const svg = SVG_BY_CATEGORY[offer.category] || SVG_BY_CATEGORY.Other;
-  return `url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`;
-}
-const imageSizeFor = (offer) => (offer.image ? 'cover' : 'contain');
+// Solid-fill accents — the animated gradient + SVG sand-dissolve effects
+// were web-only and removed when we dropped web support.
+const liveDark = { backgroundColor: '#7A1230' };
 
 const HEADER_HEIGHT = 64;
 const buildRadiusOptions = (t) => [
@@ -178,7 +71,6 @@ function haversineKm(a, b) {
 }
 
 export default function BrowseScreen({ dbOffers, loading }) {
-  useEffect(() => { ensureKeyframes(); }, []);
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
@@ -473,10 +365,7 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
       <View style={styles.searchWrap}>
         <Text style={styles.searchIcon}>⌕</Text>
         <TextInput
-          style={[
-            styles.search,
-            Platform.OS === 'web' && { outlineStyle: 'none', transition: transitions.base },
-          ]}
+          style={styles.search}
           placeholder={t('Search requests…')}
           placeholderTextColor={colors.textTertiary}
           value={value}
@@ -535,7 +424,7 @@ function OfferCard({ offer, onPress }) {
             </View>
           ) : null}
           <View style={styles.cardPriceTag}>
-            <Text style={styles.cardPriceTagText}>${offer.price}</Text>
+            <Text style={styles.cardPriceTagText}>₾{offer.price}</Text>
           </View>
         </BgImage>
         <View style={styles.cardBody}>
@@ -551,140 +440,18 @@ function OfferCard({ offer, onPress }) {
 }
 
 function OfferMap({ offer, t }) {
-  const [unfolded, setUnfolded] = useState(false);
-  const [coverGone, setCoverGone] = useState(false);
-  const reveal = useRef(new Animated.Value(0)).current;
-  const rafRef = useRef(null);
-
-  useEffect(() => {
-    ensureSandFilter();
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const alphaEl = document.getElementById(SAND_ALPHA_ID);
-      if (alphaEl) alphaEl.setAttribute('intercept', '1');
-    }
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    };
-  }, []);
-
-  if (Platform.OS !== 'web') {
-    // Native: render the same MapLibre WebView we use for picking, but
-    // non-interactive. The fancy "sand uncover" reveal animation is web-only
-    // (it relies on an SVG filter in the DOM), so we just show the map
-    // directly.
-    const hasCoordsN = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
-    if (!hasCoordsN) return null;
-    return (
-      <View style={styles.mapWrap}>
-        <MapPicker
-          latitude={offer.latitude}
-          longitude={offer.longitude}
-          onChange={() => {}}
-          draggable={false}
-          height={200}
-        />
-      </View>
-    );
-  }
   const hasCoords = typeof offer.latitude === 'number' && typeof offer.longitude === 'number';
-  const query = hasCoords
-    ? `${offer.latitude},${offer.longitude}`
-    : (offer.location || '').trim();
-  if (!query) return null;
-  const src = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=15&output=embed`;
-  const linkHref = hasCoords
-    ? `https://www.google.com/maps/search/?api=1&query=${offer.latitude},${offer.longitude}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-
-  function unfoldCover() {
-    if (unfolded) return;
-    setUnfolded(true);
-
-    Animated.timing(reveal, {
-      toValue: 1,
-      duration: 1700,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: true,
-    }).start();
-
-    const alphaEl = typeof document !== 'undefined'
-      ? document.getElementById(SAND_ALPHA_ID)
-      : null;
-    if (!alphaEl) {
-      setTimeout(() => setCoverGone(true), 1700);
-      return;
-    }
-    alphaEl.setAttribute('intercept', '1');
-    const startT = performance.now();
-    const duration = 1700;
-    function tick(now) {
-      const k = Math.min(1, (now - startT) / duration);
-      // ease-in-out so first specks vanish slowly, then it accelerates,
-      // then settles into the last specks
-      const eased = k < 0.5
-        ? 2 * k * k
-        : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      // intercept goes 1 → -1.1 (slight overshoot ensures full clearance)
-      const intercept = 1 - eased * 2.1;
-      alphaEl.setAttribute('intercept', String(intercept));
-      if (k < 1) {
-        rafRef.current = requestAnimationFrame(tick);
-      } else {
-        rafRef.current = null;
-        setCoverGone(true);
-      }
-    }
-    rafRef.current = requestAnimationFrame(tick);
-  }
-
-  const mapOpacity = reveal.interpolate({ inputRange: [0, 0.55, 1], outputRange: [0, 0.6, 1] });
-  const btnOpacity = reveal.interpolate({ inputRange: [0, 0.15, 0.45], outputRange: [1, 0.5, 0] });
-
+  if (!hasCoords) return null;
+  const linkHref = `https://www.google.com/maps/search/?api=1&query=${offer.latitude},${offer.longitude}`;
   return (
     <View style={styles.mapWrap}>
-      <View style={styles.mapFrame}>
-        <Animated.View style={{ width: '100%', height: '100%', opacity: mapOpacity }}>
-          {React.createElement('iframe', {
-            src,
-            loading: 'lazy',
-            referrerPolicy: 'no-referrer-when-downgrade',
-            allowFullScreen: true,
-            style: { border: 0, width: '100%', height: '100%', display: 'block' },
-            title: 'Offer location',
-          })}
-        </Animated.View>
-
-        {!coverGone ? (
-          <View
-            pointerEvents={unfolded ? 'none' : 'auto'}
-            style={[
-              styles.mapCoverWrap,
-              liveDark,
-              unfolded && styles.mapCoverDissolving,
-            ]}
-          >
-            <View pointerEvents="none" style={styles.mapCoverGrain} />
-            <Animated.View
-              style={[styles.mapCoverContent, { opacity: btnOpacity }]}
-              pointerEvents={unfolded ? 'none' : 'box-none'}
-            >
-              <Pressable
-                onPress={unfoldCover}
-                style={({ hovered }) => [
-                  styles.mapUnfoldBtn,
-                  hovered && styles.mapUnfoldBtnHover,
-                  Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
-                ]}
-              >
-                <Text style={styles.mapUnfoldBtnText}>{t('Unfold location')}</Text>
-              </Pressable>
-            </Animated.View>
-          </View>
-        ) : null}
-      </View>
+      <MapPicker
+        latitude={offer.latitude}
+        longitude={offer.longitude}
+        onChange={() => {}}
+        draggable={false}
+        height={200}
+      />
       <Pressable onPress={() => Linking.openURL(linkHref)} style={styles.mapOpenBtn}>
         <Text style={styles.mapOpenText}>{t('Open in Google Maps ↗')}</Text>
       </Pressable>
@@ -757,7 +524,7 @@ function DetailsModal({ offer, onClose }) {
                   <Text style={styles.modalName}>{data.name}</Text>
                   <Text style={styles.modalSub}>{displayLocation}</Text>
                 </View>
-                <Text style={styles.modalPrice}>${data.price}</Text>
+                <Text style={styles.modalPrice}>₾{data.price}</Text>
               </View>
 
               <Text style={styles.modalDesc}>{data.description}</Text>
@@ -1059,50 +826,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     position: 'relative',
-  },
-  mapCoverWrap: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapCoverDissolving: Platform.OS === 'web'
-    ? { filter: `url(#${SAND_FILTER_ID})`, WebkitFilter: `url(#${SAND_FILTER_ID})` }
-    : null,
-  mapCoverGrain: Platform.OS === 'web'
-    ? {
-        ...StyleSheet.absoluteFillObject,
-        backgroundImage: NOISE_URL,
-        backgroundSize: '220px 220px',
-        backgroundRepeat: 'repeat',
-        mixBlendMode: 'overlay',
-        opacity: 0.32,
-      }
-    : { ...StyleSheet.absoluteFillObject, opacity: 0.2 },
-  mapCoverContent: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  mapUnfoldBtn: {
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderColor: 'rgba(255,255,255,0.45)',
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: radius.pill,
-    backdropFilter: Platform.OS === 'web' ? 'blur(6px)' : undefined,
-  },
-  mapUnfoldBtnHover: {
-    backgroundColor: 'rgba(255,255,255,0.26)',
-    borderColor: 'rgba(255,255,255,0.7)',
-  },
-  mapUnfoldBtnText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.4,
   },
   mapOpenBtn: {
     alignSelf: 'flex-end',

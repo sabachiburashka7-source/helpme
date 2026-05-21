@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, transitions } from './theme';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radius } from './theme';
 import * as Storage from './storage';
 
 const STORAGE_KEY = 'helpme.lang';
@@ -83,7 +83,7 @@ const dict = {
     'Mine': 'Мои',
     'Description': 'Описание',
     'What do you need help with?': 'С чем нужна помощь?',
-    'Price (USD)': 'Цена (USD)',
+    'Price (GEL)': 'Цена (₾)',
     'Location': 'Локация',
     'Use my location': 'Моя локация',
     'Type address': 'Ввести адрес',
@@ -177,7 +177,7 @@ const dict = {
     'Mine': 'ჩემი',
     'Description': 'აღწერა',
     'What do you need help with?': 'რაში გჭირდებათ დახმარება?',
-    'Price (USD)': 'ფასი (USD)',
+    'Price (GEL)': 'ფასი (₾)',
     'Location': 'მდებარეობა',
     'Use my location': 'ჩემი მდებარეობა',
     'Type address': 'მისამართის შეყვანა',
@@ -268,7 +268,6 @@ export function LanguageSwitcher({ size = 'sm', style }) {
               size === 'md' && switcherStyles.chipMd,
               active && switcherStyles.chipActive,
               hovered && !active && switcherStyles.chipHover,
-              Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
             ]}
           >
             <Text

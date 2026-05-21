@@ -1,15 +1,6 @@
-// Cross-platform "div with backgroundImage" replacement.
-//
-// On web, React Native Web translates `backgroundImage` CSS to the DOM, so
-// the old code worked. On native (Android/iOS) `backgroundImage` is silently
-// ignored — `View` simply doesn't support it.
-//
-// This component renders an absolutely-positioned <Image> under any children,
-// giving the same visual result without depending on `backgroundImage`.
-//
-// `source` is a plain string URI (`https://...`, `data:image/...`, etc.) or
-// null. When null/empty, an optional placeholder colour + label render
-// instead, so callers don't have to branch.
+// Drop-in replacement for `<View style={{ backgroundImage: url(...) }}>`.
+// Renders an absolutely-positioned <Image> underneath any children, plus an
+// optional placeholder colour + label for when `source` is empty/missing.
 
 import React from 'react';
 import { View, Image, Text, StyleSheet } from 'react-native';
@@ -24,8 +15,8 @@ export function BgImage({
   children,
 }) {
   const hasUri = typeof source === 'string' && source.length > 0;
-  // SVG data URLs need react-native-svg to render natively; we don't have it,
-  // so treat them the same as missing → fall through to the placeholder.
+  // SVG data URLs need react-native-svg to render — we don't have it,
+  // so fall back to the placeholder for those.
   const isRasterUri = hasUri && !source.startsWith('data:image/svg');
 
   return (

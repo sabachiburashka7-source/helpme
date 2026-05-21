@@ -3,15 +3,11 @@
   "builds": [
     { "src": "api/generate-image.js", "use": "@vercel/node" },
     { "src": "api/offers.js", "use": "@vercel/node" },
-    { "src": "api/auth.js", "use": "@vercel/node" },
-    { "src": "dist/**", "use": "@vercel/static" }
+    { "src": "api/auth.js", "use": "@vercel/node" }
   ],
   "routes": [
     { "src": "/api/generate-image", "dest": "/api/generate-image.js" },
     { "src": "/api/offers", "dest": "/api/offers.js" },
-    { "src": "/api/auth", "dest": "/api/auth.js" },
-    { "src": "/_expo/(.*)", "dest": "/dist/_expo/$1" },
-    { "src": "/favicon.ico", "dest": "/dist/favicon.ico" },
-    { "src": "/(.*)", "dest": "/dist/index.html" }
+    { "src": "/api/auth", "dest": "/api/auth.js" }
   ]
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View, Platform } from 'react-native';
-import { colors, transitions } from './theme';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors } from './theme';
 
 export default function SegmentedTabs({ tabs, value, onChange, hideIndicator = false }) {
   const [width, setWidth] = useState(0);
@@ -45,7 +45,6 @@ export default function SegmentedTabs({ tabs, value, onChange, hideIndicator = f
               style={({ hovered }) => [
                 styles.tab,
                 isLast && { marginRight: 0 },
-                Platform.OS === 'web' && { transition: transitions.fast, cursor: 'pointer' },
                 hovered && !active && styles.tabHover,
               ]}
             >

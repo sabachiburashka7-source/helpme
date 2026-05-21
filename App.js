@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Platform, useWindowDimensions, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -48,9 +48,6 @@ function AppInner() {
   const [dbOffers, setDbOffers] = useState([]);
   const [myOffers, setMyOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
-  const { width } = useWindowDimensions();
-  const isWeb = Platform.OS === 'web';
-  const isWideScreen = isWeb && width > 480;
   const { t } = useTranslation();
 
   // Hydrate the persisted user once on mount. Async on native (AsyncStorage),
@@ -242,18 +239,10 @@ function AppInner() {
 
   // While we read the persisted user from storage, render nothing on a
   // background color so we don't briefly flash the auth screen.
-  const Content = !userHydrated
-    ? <View style={{ flex: 1, backgroundColor: colors.bg }} />
-    : user ? AppContent : AuthContent;
-
-  if (isWideScreen) {
-    return (
-      <View style={styles.webBg}>
-        <View style={styles.phoneFrame}>{Content}</View>
-      </View>
-    );
+  if (!userHydrated) {
+    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   }
-  return Content;
+  return user ? AppContent : AuthContent;
 }
 
 function AnimatedTabIcon({ route, color, focused }) {
@@ -348,23 +337,6 @@ function RequestsIcon({ color }) {
 }
 
 const styles = StyleSheet.create({
-  webBg: {
-    flex: 1,
-    backgroundColor: '#EAEAEF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-  },
-  phoneFrame: {
-    width: 390,
-    height: 780,
-    backgroundColor: colors.bg,
-    borderRadius: 40,
-    overflow: 'hidden',
-    borderWidth: 8,
-    borderColor: '#0A0A0A',
-    boxShadow: '0 30px 80px rgba(15, 15, 30, 0.28), 0 8px 20px rgba(15, 15, 30, 0.12)',
-  },
   iconWrap: {
     width: 36,
     height: 22,

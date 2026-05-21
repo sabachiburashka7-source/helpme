@@ -375,7 +375,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
 
               <FadeInUp delay={50}>
                 <Field
-                  label={t('Price (USD)')}
+                  label={t('Price (GEL)')}
                   placeholder="50"
                   keyboardType="numeric"
                   value={form.price}
@@ -555,7 +555,7 @@ function MyOfferCard({ offer, onRemove }) {
       <View style={styles.myCardBody}>
         <View style={styles.myCardTop}>
           <View style={styles.priceChip}>
-            <Text style={styles.priceChipText}>${offer.price}</Text>
+            <Text style={styles.priceChipText}>₾{offer.price}</Text>
           </View>
           {onRemove ? (
             <Pressable onPress={handleDelete} style={styles.deleteBtn} accessibilityLabel={t('Delete')}>
