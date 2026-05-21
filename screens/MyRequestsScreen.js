@@ -373,40 +373,6 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 />
               </FadeInUp>
 
-              <FadeInUp delay={40}>
-                <View style={fieldStyles.wrap}>
-                  <Text style={fieldStyles.label}>{t('Photos (optional)')}</Text>
-                  {(form.images || []).length > 0 ? (
-                    <View style={photoStyles.thumbRow}>
-                      {(form.images || []).map((src, i) => (
-                        <View key={i} style={photoStyles.thumbWrap}>
-                          <BgImage
-                            source={src}
-                            resizeMode="cover"
-                            style={photoStyles.thumb}
-                          />
-                          <Pressable
-                            onPress={() => removeOfferImage(i)}
-                            style={photoStyles.removeBtn}
-                            accessibilityLabel={t('Remove photo')}
-                          >
-                            <Text style={photoStyles.removeBtnText}>✕</Text>
-                          </Pressable>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                  {(form.images || []).length < MAX_OFFER_IMAGES ? (
-                    <Pressable onPress={handlePickOfferImages} style={photoStyles.addBtn}>
-                      <View style={photoStyles.addBtnIcon}>
-                        <Text style={photoStyles.addBtnPlus}>+</Text>
-                      </View>
-                      <Text style={photoStyles.addBtnText}>{t('Add photos')}</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </FadeInUp>
-
               <FadeInUp delay={50}>
                 <Field
                   label={t('Price (USD)')}
@@ -493,8 +459,42 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 </View>
               </FadeInUp>
 
+              <FadeInUp delay={140}>
+                <View style={fieldStyles.wrap}>
+                  <Text style={fieldStyles.label}>{t('Photos (optional)')}</Text>
+                  {(form.images || []).length > 0 ? (
+                    <View style={photoStyles.thumbRow}>
+                      {(form.images || []).map((src, i) => (
+                        <View key={i} style={photoStyles.thumbWrap}>
+                          <BgImage
+                            source={src}
+                            resizeMode="cover"
+                            style={photoStyles.thumb}
+                          />
+                          <Pressable
+                            onPress={() => removeOfferImage(i)}
+                            style={photoStyles.removeBtn}
+                            accessibilityLabel={t('Remove photo')}
+                          >
+                            <Text style={photoStyles.removeBtnText}>✕</Text>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  {(form.images || []).length < MAX_OFFER_IMAGES ? (
+                    <Pressable onPress={handlePickOfferImages} style={photoStyles.addBtn}>
+                      <View style={photoStyles.addBtnIcon}>
+                        <Text style={photoStyles.addBtnPlus}>+</Text>
+                      </View>
+                      <Text style={photoStyles.addBtnText}>{t('Add photos')}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </FadeInUp>
+
               <View style={{ height: 28 }} />
-              <FadeInUp delay={150}>
+              <FadeInUp delay={170}>
                 <SoftButton title={t('Post request')} onPress={handleSubmit} />
               </FadeInUp>
               <View style={{ height: 36 }} />
@@ -594,15 +594,15 @@ const styles = StyleSheet.create({
   // Hero
   heroOuter: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 18,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
   hero: {
     backgroundColor: colors.accentSoft,
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 22,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.accentSoftBorder,
@@ -612,45 +612,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   avatarRing: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 12,
-    boxShadow: '0 10px 28px rgba(122, 18, 48, 0.22)',
+    marginTop: 2,
+    marginBottom: 6,
+    boxShadow: '0 6px 18px rgba(122, 18, 48, 0.18)',
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
-  avatarPlus: { color: '#fff', fontWeight: '300', fontSize: 40, lineHeight: 42 },
+  avatarPlus: { color: '#fff', fontWeight: '300', fontSize: 30, lineHeight: 32 },
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 40,
+    borderRadius: 28,
     backgroundColor: colors.surfaceAlt,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.text,
     textAlign: 'center',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   profileSub: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 3,
+    marginTop: 2,
     textAlign: 'center',
   },
 
