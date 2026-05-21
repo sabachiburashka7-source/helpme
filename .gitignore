@@ -47,3 +47,8 @@ yarn-error.*
 /android/app/build/
 /android/local.properties
 /android/.idea/
+
+# Release signing — NEVER commit. Keep keystore + passwords out of git.
+/android/keystore.properties
+/android/app/helpme-release.keystore
+/android/app/*.keystore

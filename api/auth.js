@@ -73,6 +73,13 @@ module.exports = async function handler(req, res) {
   const { action, phone, code, intent, name, profile_image } = req.body || {};
   const cleanPhone = normalizePhone(phone);
 
+  // Play Store review bypass: lets Google's reviewers log in without receiving
+  // a Georgian SMS. Activated only when both env vars are set and the inbound
+  // phone matches. The OTP is checked locally instead of via Twilio Verify.
+  const testPhone = normalizePhone(process.env.TEST_PHONE || '');
+  const testOtp = (process.env.TEST_OTP || '').trim();
+  const isTestPhone = Boolean(testPhone && testOtp && cleanPhone === testPhone);
+
   if (action === 'update_profile_image') {
     if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
       return res.status(400).json({ error: 'Enter a valid phone number' });
@@ -128,6 +135,11 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Unknown intent' });
     }
 
+    if (isTestPhone) {
+      console.log('[auth] test-phone send_code bypass');
+      return res.json({ status: 'sent' });
+    }
+
     const existing = await callSupabase(
       `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id`,
       { headers: baseHeaders }
@@ -164,6 +176,57 @@ module.exports = async function handler(req, res) {
     const wantsLogin = intent === 'login';
     if (!wantsRegister && !wantsLogin) {
       return res.status(400).json({ error: 'Unknown intent' });
+    }
+
+    if (isTestPhone) {
+      console.log('[auth] test-phone verify_code bypass');
+      if (code.trim() !== testOtp) {
+        return res.status(401).json({ error: 'Incorrect or expired code' });
+      }
+      // Ensure-or-fetch: works for both register and login so reviewer can hit
+      // either flow without server-state coordination.
+      const found = await callSupabase(
+        `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id,phone,name,profile_image`,
+        { headers: baseHeaders }
+      );
+      if (!found.ok) {
+        return res.status(found.status).json({
+          error: supabaseError(found.data, 'Could not reach users table'),
+          supabase: found.data,
+        });
+      }
+      const existingRow = Array.isArray(found.data) && found.data[0];
+      if (existingRow) {
+        return res.json({
+          id: existingRow.id,
+          phone: existingRow.phone,
+          name: existingRow.name,
+          profile_image: existingRow.profile_image || null,
+        });
+      }
+      const cleanName = (typeof name === 'string' && name.trim()) || 'Play Store Reviewer';
+      const insertPayload = { phone: cleanPhone, name: cleanName };
+      if (typeof profile_image === 'string' && profile_image) {
+        insertPayload.profile_image = profile_image;
+      }
+      const created = await callSupabase('/rest/v1/users', {
+        method: 'POST',
+        headers: { ...baseHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify(insertPayload),
+      });
+      if (!created.ok) {
+        return res.status(created.status).json({
+          error: supabaseError(created.data, 'Could not create account'),
+          supabase: created.data,
+        });
+      }
+      const row = Array.isArray(created.data) ? created.data[0] : created.data;
+      return res.status(wantsRegister ? 201 : 200).json({
+        id: row.id,
+        phone: row.phone,
+        name: row.name,
+        profile_image: row.profile_image || null,
+      });
     }
 
     const checked = await twilioVerify('/VerificationCheck', {

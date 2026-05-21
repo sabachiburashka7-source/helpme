@@ -3,11 +3,14 @@
   "builds": [
     { "src": "api/generate-image.js", "use": "@vercel/node" },
     { "src": "api/offers.js", "use": "@vercel/node" },
-    { "src": "api/auth.js", "use": "@vercel/node" }
+    { "src": "api/auth.js", "use": "@vercel/node" },
+    { "src": "api/privacy.js", "use": "@vercel/node" }
   ],
   "routes": [
     { "src": "/api/generate-image", "dest": "/api/generate-image.js" },
     { "src": "/api/offers", "dest": "/api/offers.js" },
-    { "src": "/api/auth", "dest": "/api/auth.js" }
+    { "src": "/api/auth", "dest": "/api/auth.js" },
+    { "src": "/privacy", "dest": "/api/privacy.js" },
+    { "src": "/api/privacy", "dest": "/api/privacy.js" }
   ]
 }
