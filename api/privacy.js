@@ -6,7 +6,7 @@ module.exports = function handler(req, res) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>helpme — Privacy Policy</title>
+  <title>Kheli — Privacy Policy</title>
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.6; }
     h1 { font-size: 30px; margin-bottom: 4px; }
@@ -24,16 +24,16 @@ module.exports = function handler(req, res) {
 <body>
   <h1>Privacy Policy</h1>
   <p class="meta">
-    App: <strong>helpme</strong> (Android, package <code>com.sabachiburashka.helpme</code>)<br/>
+    App: <strong>Kheli</strong> (Android, package <code>com.sabachiburashka.helpme</code>)<br/>
     Developer: sabachiburashka &middot; Contact: <a href="mailto:sabachiburashka7@gmail.com">sabachiburashka7@gmail.com</a><br/>
     Effective date: 2026-05-24 &middot; Last updated: 2026-05-24
   </p>
 
-  <p>This Privacy Policy explains what information the helpme mobile application (the "App") collects, how that information is used and shared, the choices you have, and how to contact us or delete your data. By using the App you agree to the practices described here.</p>
+  <p>This Privacy Policy explains what information the Kheli mobile application (the "App") collects, how that information is used and shared, the choices you have, and how to contact us or delete your data. By using the App you agree to the practices described here.</p>
 
   <div class="callout">
     <strong>Important — content shared with other users.</strong>
-    When you post a request, your <strong>display name, profile photo, phone number, request text, attached photos, and the location you pin on the map</strong> are visible to all other helpme users browsing the area. Other users contact you directly by calling or messaging the phone number shown on your request. Do not post a request unless you are comfortable with your phone number being seen by other users of the App.
+    When you post a request, your <strong>display name, profile photo, phone number, request text, attached photos, and the location you pin on the map</strong> are visible to all other Kheli users browsing the area. Other users contact you directly by calling or messaging the phone number shown on your request. Do not post a request unless you are comfortable with your phone number being seen by other users of the App.
   </div>
 
   <h2>1. Data we collect</h2>
@@ -145,7 +145,7 @@ module.exports = function handler(req, res) {
     <li><strong>Access</strong> the data we hold about you.</li>
     <li><strong>Correct</strong> inaccurate data (your name and profile photo can be edited in the App; to correct your phone number, contact us).</li>
     <li><strong>Delete</strong> your account and all associated data — see Section 7.</li>
-    <li><strong>Withdraw consent</strong> for optional permissions at any time by revoking them in Android Settings &rarr; Apps &rarr; helpme &rarr; Permissions.</li>
+    <li><strong>Withdraw consent</strong> for optional permissions at any time by revoking them in Android Settings &rarr; Apps &rarr; Kheli &rarr; Permissions.</li>
     <li><strong>Object or restrict</strong> certain processing, where applicable under your local law.</li>
     <li><strong>Lodge a complaint</strong> with your local data-protection authority.</li>
   </ul>

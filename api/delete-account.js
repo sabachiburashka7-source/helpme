@@ -6,7 +6,7 @@ module.exports = function handler(req, res) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>helpme — Delete your account</title>
+  <title>Kheli — Delete your account</title>
   <style>
     body { font-family: -apple-system, system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; line-height: 1.6; }
     h1 { font-size: 28px; margin-bottom: 4px; }
@@ -19,16 +19,16 @@ module.exports = function handler(req, res) {
   </style>
 </head>
 <body>
-  <h1>Delete your helpme account</h1>
-  <p class="meta">App: helpme (<code>com.sabachiburashka.helpme</code>) &middot; Last updated: 2026-05-24</p>
+  <h1>Delete your Kheli account</h1>
+  <p class="meta">App: Kheli (<code>com.sabachiburashka.helpme</code>) &middot; Last updated: 2026-05-24</p>
 
-  <p>This page explains how to permanently delete your helpme account and all of the personal data associated with it. The process is free and works whether or not the App is still installed on your device.</p>
+  <p>This page explains how to permanently delete your Kheli account and all of the personal data associated with it. The process is free and works whether or not the App is still installed on your device.</p>
 
   <h2>How to request deletion</h2>
   <div class="box">
-    <p>Send an email to <a href="mailto:sabachiburashka7@gmail.com?subject=Delete%20my%20helpme%20account">sabachiburashka7@gmail.com</a> from the phone number on your account, including:</p>
+    <p>Send an email to <a href="mailto:sabachiburashka7@gmail.com?subject=Delete%20my%20Kheli%20account">sabachiburashka7@gmail.com</a> from the phone number on your account, including:</p>
     <ul>
-      <li>The subject line "<strong>Delete my helpme account</strong>"</li>
+      <li>The subject line "<strong>Delete my Kheli account</strong>"</li>
       <li>The phone number you signed up with (in international format, e.g. <code>+995...</code>)</li>
       <li>The display name on your account, if you remember it</li>
     </ul>

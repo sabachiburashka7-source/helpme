@@ -298,10 +298,10 @@ export default function AuthScreen({ onAuthenticated }) {
             <View style={styles.header}>
               <View style={styles.logoRing}>
                 <View style={[styles.logoDot, liveDark]}>
-                  <Text style={styles.logoLetter}>h</Text>
+                  <Text style={styles.logoLetter}>K</Text>
                 </View>
               </View>
-              <Text style={styles.brand}>helpme</Text>
+              <Text style={styles.brand}>Kheli</Text>
               <Text style={styles.tagline}>
                 {step === 'code'
                   ? t('We sent a code to {phone}').replace('{phone}', phoneE164)

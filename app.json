@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "helpme",
+    "name": "Kheli",
     "slug": "helpme",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FAF4F0"
     },
     "extra": {
       "apiBaseUrl": "https://helpme-jade-tau.vercel.app"
@@ -24,7 +24,7 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FAF4F0"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -36,14 +36,14 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow helpme to use your location to show nearby requests."
+          "locationAlwaysAndWhenInUsePermission": "Allow Kheli to use your location to show nearby requests."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow helpme to access your photos so you can attach images to your requests.",
-          "cameraPermission": "Allow helpme to use your camera to take photos for your requests."
+          "photosPermission": "Allow Kheli to access your photos so you can attach images to your requests.",
+          "cameraPermission": "Allow Kheli to use your camera to take photos for your requests."
         }
       ]
     ]
