@@ -73,6 +73,35 @@ module.exports = async function handler(req, res) {
   const { action, phone, code, intent, name, profile_image } = req.body || {};
   const cleanPhone = normalizePhone(phone);
 
+  if (action === 'delete_account') {
+    if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
+      return res.status(400).json({ error: 'Enter a valid phone number' });
+    }
+    // Remove all offers this user has posted, then the user row itself.
+    // We intentionally delete offers first so a row never lingers without an owner.
+    const offersDeleted = await callSupabase(
+      `/rest/v1/offers?phone=eq.${encodeURIComponent(cleanPhone)}`,
+      { method: 'DELETE', headers: baseHeaders }
+    );
+    if (!offersDeleted.ok) {
+      return res.status(offersDeleted.status).json({
+        error: supabaseError(offersDeleted.data, 'Could not delete your requests'),
+        supabase: offersDeleted.data,
+      });
+    }
+    const userDeleted = await callSupabase(
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}`,
+      { method: 'DELETE', headers: baseHeaders }
+    );
+    if (!userDeleted.ok) {
+      return res.status(userDeleted.status).json({
+        error: supabaseError(userDeleted.data, 'Could not delete your account'),
+        supabase: userDeleted.data,
+      });
+    }
+    return res.json({ ok: true });
+  }
+
   // Play Store review bypass: lets Google's reviewers log in without receiving
   // a Georgian SMS. Activated only when both env vars are set and the inbound
   // phone matches. The OTP is checked locally instead of via Twilio Verify.

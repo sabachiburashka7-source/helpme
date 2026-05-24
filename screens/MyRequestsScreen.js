@@ -166,8 +166,47 @@ function LoadingState() {
   );
 }
 
-export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onUpdateProfileImage }) {
+export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onUpdateProfileImage }) {
   const { t, lang } = useTranslation();
+
+  function handleDeleteAccount() {
+    if (!onDeleteAccount) return;
+    // Two-step Android-standard confirmation. No password/OTP — matches the
+    // rest of the app's trust model (logged-in device = authoritative).
+    Alert.alert(
+      t('Delete account?'),
+      t('This permanently removes your profile, all requests you have posted, and any photos. This cannot be undone.'),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Continue'),
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              t('Are you sure?'),
+              t('There is no recovery. Tap Delete to permanently remove your account.'),
+              [
+                { text: t('Cancel'), style: 'cancel' },
+                {
+                  text: t('Delete'),
+                  style: 'destructive',
+                  onPress: async () => {
+                    const result = await onDeleteAccount();
+                    if (!result?.ok) {
+                      Alert.alert(
+                        t('Something went wrong'),
+                        result?.error || t('Network error. Try again.')
+                      );
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  }
 
   const [tab, setTab] = useState('new');
   const [form, setForm] = useState({
@@ -342,6 +381,16 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 <Text style={styles.profileName} numberOfLines={1}>{profile.name}</Text>
                 {profile.phone ? (
                   <Text style={styles.profileSub} numberOfLines={1}>{profile.phone}</Text>
+                ) : null}
+                {onDeleteAccount ? (
+                  <Pressable
+                    onPress={handleDeleteAccount}
+                    style={styles.dangerLink}
+                    hitSlop={8}
+                    accessibilityLabel={t('Delete account')}
+                  >
+                    <Text style={styles.dangerLinkText}>{t('Delete account')}</Text>
+                  </Pressable>
                 ) : null}
               </View>
             </View>
@@ -762,6 +811,18 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '700',
     lineHeight: 14,
+  },
+  dangerLink: {
+    marginTop: 10,
+    paddingVertical: 4,
+  },
+  dangerLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: colors.textTertiary,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 });
 

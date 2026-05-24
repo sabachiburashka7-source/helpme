@@ -108,6 +108,12 @@ const dict = {
     'Add photos': 'Добавить фото',
     'Remove photo': 'Удалить фото',
     'My requests': 'Мои запросы',
+    'Delete account': 'Удалить аккаунт',
+    'Delete account?': 'Удалить аккаунт?',
+    'This permanently removes your profile, all requests you have posted, and any photos. This cannot be undone.': 'Это безвозвратно удалит ваш профиль, все опубликованные запросы и все фото. Отменить нельзя.',
+    'Continue': 'Продолжить',
+    'Are you sure?': 'Точно удалить?',
+    'There is no recovery. Tap Delete to permanently remove your account.': 'Восстановление невозможно. Нажмите «Удалить», чтобы окончательно удалить аккаунт.',
   },
   ka: {
     // common
@@ -202,6 +208,12 @@ const dict = {
     'Add photos': 'ფოტოს დამატება',
     'Remove photo': 'ფოტოს წაშლა',
     'My requests': 'ჩემი მოთხოვნები',
+    'Delete account': 'ანგარიშის წაშლა',
+    'Delete account?': 'წავშალოთ ანგარიში?',
+    'This permanently removes your profile, all requests you have posted, and any photos. This cannot be undone.': 'სამუდამოდ წაიშლება თქვენი პროფილი, ყველა გამოქვეყნებული მოთხოვნა და ფოტოები. ამის გაუქმება შეუძლებელია.',
+    'Continue': 'გაგრძელება',
+    'Are you sure?': 'დარწმუნებული ხართ?',
+    'There is no recovery. Tap Delete to permanently remove your account.': 'აღდგენა შეუძლებელია. დააჭირეთ „წაშლა"-ს ანგარიშის სამუდამოდ წასაშლელად.',
   },
 };
 

@@ -92,6 +92,23 @@ function AppInner() {
     setDbOffers([]);
   }
 
+  async function deleteAccount() {
+    if (!user) return { ok: false, error: 'Not signed in' };
+    try {
+      const r = await fetch(apiUrl('/api/auth'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_account', phone: user.phone }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return { ok: false, error: data?.error || 'Could not delete account' };
+      handleLogout();
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Network error. Try again.' };
+    }
+  }
+
   async function updateProfileImage(dataUrl) {
     const previous = user;
     const optimistic = { ...user, profile_image: dataUrl || null };
@@ -229,6 +246,7 @@ function AppInner() {
               onUpdateOffer={updateOffer}
               onRemoveOffer={removeOffer}
               onLogout={handleLogout}
+              onDeleteAccount={deleteAccount}
               onUpdateProfileImage={updateProfileImage}
             />
           )}
