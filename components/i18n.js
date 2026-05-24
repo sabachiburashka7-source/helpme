@@ -114,6 +114,13 @@ const dict = {
     'Continue': 'Продолжить',
     'Are you sure?': 'Точно удалить?',
     'There is no recovery. Tap Delete to permanently remove your account.': 'Восстановление невозможно. Нажмите «Удалить», чтобы окончательно удалить аккаунт.',
+    'Free': 'Бесплатный',
+    'Pro': 'Pro',
+    '{used}/{limit} posts this month': '{used}/{limit} запросов в этом месяце',
+    'Upgrade': 'Улучшить',
+    'Monthly limit reached': 'Месячный лимит исчерпан',
+    'You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.': 'Вы использовали все {n} бесплатных запросов в этом месяце. Перейдите на Pro — 15 запросов в месяц всего за $1.',
+    'Not now': 'Позже',
   },
   ka: {
     // common
@@ -214,6 +221,13 @@ const dict = {
     'Continue': 'გაგრძელება',
     'Are you sure?': 'დარწმუნებული ხართ?',
     'There is no recovery. Tap Delete to permanently remove your account.': 'აღდგენა შეუძლებელია. დააჭირეთ „წაშლა"-ს ანგარიშის სამუდამოდ წასაშლელად.',
+    'Free': 'უფასო',
+    'Pro': 'Pro',
+    '{used}/{limit} posts this month': '{used}/{limit} მოთხოვნა ამ თვეში',
+    'Upgrade': 'გაუმჯობესება',
+    'Monthly limit reached': 'თვის ლიმიტი ამოწურულია',
+    'You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.': 'ამ თვის {n} უფასო მოთხოვნა უკვე გამოყენებულია. გადადით Pro-ზე — 15 მოთხოვნა ყოველთვიურად მხოლოდ $1-ად.',
+    'Not now': 'მოგვიანებით',
   },
 };
 

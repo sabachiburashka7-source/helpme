@@ -11,6 +11,30 @@ function isE164(phone) {
   return /^\+\d{8,15}$/.test(phone);
 }
 
+// Effective tier: stored 'pro' only counts while subscription_expires_at is
+// in the future. Anything else (including 'pro' past its expiry) is 'free'.
+function effectiveTier(row) {
+  if (!row || row.tier !== 'pro') return 'free';
+  if (!row.subscription_expires_at) return 'free';
+  return new Date(row.subscription_expires_at).getTime() > Date.now() ? 'pro' : 'free';
+}
+
+// Shape every user response identically so the client always sees the same
+// fields (id, phone, name, profile_image, tier, subscription_expires_at).
+function shapeUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    phone: row.phone,
+    name: row.name,
+    profile_image: row.profile_image || null,
+    tier: effectiveTier(row),
+    subscription_expires_at: row.subscription_expires_at || null,
+  };
+}
+
+const USER_SELECT = 'id,phone,name,profile_image,tier,subscription_expires_at';
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -102,6 +126,28 @@ module.exports = async function handler(req, res) {
     return res.json({ ok: true });
   }
 
+  if (action === 'me') {
+    // Lightweight "who am I" used on app start to refresh the locally
+    // cached user (tier may have changed since last login: subscription
+    // started, renewed, expired, or was cancelled).
+    if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
+      return res.status(400).json({ error: 'Enter a valid phone number' });
+    }
+    const found = await callSupabase(
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=${USER_SELECT}`,
+      { headers: baseHeaders }
+    );
+    if (!found.ok) {
+      return res.status(found.status).json({
+        error: supabaseError(found.data, 'Could not reach users table'),
+        supabase: found.data,
+      });
+    }
+    const row = Array.isArray(found.data) ? found.data[0] : null;
+    if (!row) return res.status(404).json({ error: 'No account found' });
+    return res.json(shapeUser(row));
+  }
+
   // Play Store review bypass: lets Google's reviewers log in without receiving
   // a Georgian SMS. Activated only when both env vars are set and the inbound
   // phone matches. The OTP is checked locally instead of via Twilio Verify.
@@ -117,7 +163,7 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid profile image' });
     }
     const updated = await callSupabase(
-      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}`,
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=${USER_SELECT}`,
       {
         method: 'PATCH',
         headers: { ...baseHeaders, Prefer: 'return=representation' },
@@ -144,7 +190,7 @@ module.exports = async function handler(req, res) {
       }
     ).catch(() => {});
 
-    return res.json({ id: row.id, phone: row.phone, name: row.name, profile_image: row.profile_image });
+    return res.json(shapeUser(row));
   }
 
   if (!isE164(cleanPhone)) {
@@ -215,7 +261,7 @@ module.exports = async function handler(req, res) {
       // Ensure-or-fetch: works for both register and login so reviewer can hit
       // either flow without server-state coordination.
       const found = await callSupabase(
-        `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id,phone,name,profile_image`,
+        `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=${USER_SELECT}`,
         { headers: baseHeaders }
       );
       if (!found.ok) {
@@ -226,12 +272,7 @@ module.exports = async function handler(req, res) {
       }
       const existingRow = Array.isArray(found.data) && found.data[0];
       if (existingRow) {
-        return res.json({
-          id: existingRow.id,
-          phone: existingRow.phone,
-          name: existingRow.name,
-          profile_image: existingRow.profile_image || null,
-        });
+        return res.json(shapeUser(existingRow));
       }
       const cleanName = (typeof name === 'string' && name.trim()) || 'Play Store Reviewer';
       const insertPayload = { phone: cleanPhone, name: cleanName };
@@ -250,12 +291,7 @@ module.exports = async function handler(req, res) {
         });
       }
       const row = Array.isArray(created.data) ? created.data[0] : created.data;
-      return res.status(wantsRegister ? 201 : 200).json({
-        id: row.id,
-        phone: row.phone,
-        name: row.name,
-        profile_image: row.profile_image || null,
-      });
+      return res.status(wantsRegister ? 201 : 200).json(shapeUser(row));
     }
 
     const checked = await twilioVerify('/VerificationCheck', {
@@ -305,17 +341,12 @@ module.exports = async function handler(req, res) {
         });
       }
       const row = Array.isArray(created.data) ? created.data[0] : created.data;
-      return res.status(201).json({
-        id: row.id,
-        phone: row.phone,
-        name: row.name,
-        profile_image: row.profile_image || null,
-      });
+      return res.status(201).json(shapeUser(row));
     }
 
     // login
     const found = await callSupabase(
-      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=id,phone,name,profile_image`,
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=${USER_SELECT}`,
       { headers: baseHeaders }
     );
     if (!found.ok) {
@@ -326,12 +357,7 @@ module.exports = async function handler(req, res) {
     }
     const row = Array.isArray(found.data) ? found.data[0] : null;
     if (!row) return res.status(404).json({ error: 'No account found for this number' });
-    return res.json({
-      id: row.id,
-      phone: row.phone,
-      name: row.name,
-      profile_image: row.profile_image || null,
-    });
+    return res.json(shapeUser(row));
   }
 
   return res.status(400).json({ error: 'Unknown action' });

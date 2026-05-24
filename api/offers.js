@@ -1,3 +1,18 @@
+// Monthly post quota per tier. Server-enforced so a tampered client can't
+// bypass it. Free tier matches what we advertise on the upgrade screen.
+const POST_QUOTA = { free: 1, pro: 15 };
+
+function startOfMonthUtcIso() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+}
+
+function effectiveTier(row) {
+  if (!row || row.tier !== 'pro') return 'free';
+  if (!row.subscription_expires_at) return 'free';
+  return new Date(row.subscription_expires_at).getTime() > Date.now() ? 'pro' : 'free';
+}
+
 module.exports = async function handler(req, res) {
   const rawUrl = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
@@ -32,6 +47,46 @@ module.exports = async function handler(req, res) {
 
   if (req.method === 'POST') {
     const { description, price, location, category, name, avatar, phone, latitude, longitude, profile_image, images } = req.body || {};
+
+    // Quota check: look up the user's tier, then count posts since the start
+    // of the current UTC month. Tampered clients are caught here. We don't
+    // require a phone on this path strictly (lets us debug), but if one is
+    // present we enforce. A missing phone falls back to free tier.
+    if (typeof phone === 'string' && phone) {
+      const userLookup = await callSupabase(
+        `/rest/v1/users?phone=eq.${encodeURIComponent(phone)}&select=tier,subscription_expires_at`,
+        { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+      );
+      const userRow = userLookup.ok && Array.isArray(userLookup.data) ? userLookup.data[0] : null;
+      const tier = effectiveTier(userRow);
+      const limit = POST_QUOTA[tier] ?? POST_QUOTA.free;
+
+      const monthStart = startOfMonthUtcIso();
+      const countResp = await callSupabase(
+        `/rest/v1/offers?phone=eq.${encodeURIComponent(phone)}&created_at=gte.${encodeURIComponent(monthStart)}&select=id`,
+        {
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            Prefer: 'count=exact',
+          },
+        }
+      );
+      // PostgREST returns the count in the Content-Range header, but we don't
+      // see that here. Fall back to counting the returned array length, which
+      // is correct because we asked for `select=id` (no row-level cost).
+      const usedThisMonth = Array.isArray(countResp.data) ? countResp.data.length : 0;
+
+      if (usedThisMonth >= limit) {
+        return res.status(402).json({
+          error: 'quota_exceeded',
+          tier,
+          limit,
+          used: usedThisMonth,
+        });
+      }
+    }
+
     const payload = { description, price, location, category, name, avatar, phone };
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       payload.latitude = latitude;

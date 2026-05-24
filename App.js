@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -50,15 +50,29 @@ function AppInner() {
   const [offersLoading, setOffersLoading] = useState(true);
   const { t } = useTranslation();
 
-  // Hydrate the persisted user once on mount. Async on native (AsyncStorage),
-  // resolves synchronously-ish on web (localStorage).
+  // Hydrate the persisted user once on mount. After hydration, refresh from
+  // the server so tier / subscription_expires_at reflect any changes since
+  // last login (subscription renewed, cancelled, expired).
   useEffect(() => {
     let cancelled = false;
     loadStoredUser().then((u) => {
-      if (!cancelled) {
-        setUser(u);
-        setUserHydrated(true);
-      }
+      if (cancelled) return;
+      setUser(u);
+      setUserHydrated(true);
+      if (!u || !u.phone) return;
+      fetch(apiUrl('/api/auth'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'me', phone: u.phone }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((fresh) => {
+          if (cancelled || !fresh || !fresh.phone) return;
+          const merged = { ...u, ...fresh };
+          persistUser(merged);
+          setUser(merged);
+        })
+        .catch(() => {});
     });
     return () => {
       cancelled = true;
@@ -155,6 +169,14 @@ function AppInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(offerData),
       });
+      // Quota exhausted: roll back the optimistic insert and report it so the
+      // caller can show the paywall instead of pretending the post succeeded.
+      if (r.status === 402) {
+        const body = await r.json().catch(() => ({}));
+        setMyOffers((prev) => prev.filter((o) => o.id !== tempId));
+        setDbOffers((prev) => prev.filter((o) => o.id !== tempId));
+        return { error: 'quota_exceeded', limit: body?.limit, used: body?.used, tier: body?.tier };
+      }
       const saved = await r.json();
       if (saved && saved.id) {
         const savedWithFlag = { ...saved, generatingImage: true };
@@ -165,6 +187,16 @@ function AppInner() {
     } catch {}
 
     return tempId;
+  }
+
+  function handleUpgrade() {
+    // Placeholder until Google Play Billing is wired up. See
+    // supabase/migrations/001_add_subscription.sql for the schema and the
+    // Phase 2 plan in the project notes.
+    Alert.alert(
+      'Pro — coming soon',
+      'In-app purchase for $1/month (15 posts) is being connected through Google Play. You can already test the Pro tier by setting tier=pro in Supabase for your account.'
+    );
   }
 
   async function removeOffer(id) {
@@ -247,6 +279,7 @@ function AppInner() {
               onRemoveOffer={removeOffer}
               onLogout={handleLogout}
               onDeleteAccount={deleteAccount}
+              onUpgrade={handleUpgrade}
               onUpdateProfileImage={updateProfileImage}
             />
           )}

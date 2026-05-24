@@ -166,8 +166,40 @@ function LoadingState() {
   );
 }
 
-export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onUpdateProfileImage }) {
+const POST_QUOTA = { free: 1, pro: 15 };
+
+function startOfMonthUtc() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+function postsThisMonthCount(offers) {
+  const cutoff = startOfMonthUtc().getTime();
+  return offers.filter((o) => {
+    if (!o.created_at) return true; // optimistic temp offers — count them
+    const t = new Date(o.created_at).getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  }).length;
+}
+
+export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onUpgrade, onUpdateProfileImage }) {
   const { t, lang } = useTranslation();
+
+  const tier = user?.tier === 'pro' ? 'pro' : 'free';
+  const quotaLimit = POST_QUOTA[tier];
+  const quotaUsed = postsThisMonthCount(myOffers);
+  const quotaRemaining = Math.max(0, quotaLimit - quotaUsed);
+
+  function showPaywall() {
+    Alert.alert(
+      t('Monthly limit reached'),
+      t('You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.').replace('{n}', String(quotaLimit)),
+      [
+        { text: t('Not now'), style: 'cancel' },
+        ...(onUpgrade ? [{ text: t('Upgrade'), onPress: () => onUpgrade() }] : []),
+      ]
+    );
+  }
 
   function handleDeleteAccount() {
     if (!onDeleteAccount) return;
@@ -315,6 +347,12 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
     if (!form.description.trim()) return Alert.alert(t('Missing'), t('Add a description.'));
     if (!form.price.trim()) return Alert.alert(t('Missing'), t('Add a price.'));
     if (!form.location.trim()) return Alert.alert(t('Missing'), t('Add a location.'));
+    // Cheap pre-check so the user gets the paywall before we wipe the form.
+    // The server enforces this independently as the source of truth.
+    if (quotaRemaining <= 0) {
+      showPaywall();
+      return;
+    }
     const { description } = form;
     const payload = {
       description: form.description,
@@ -327,7 +365,12 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
     };
     resetForm();
     setTab('mine');
-    const id = await onAddOffer(payload);
+    const result = await onAddOffer(payload);
+    if (result && typeof result === 'object' && result.error === 'quota_exceeded') {
+      showPaywall();
+      return;
+    }
+    const id = typeof result === 'string' ? result : null;
     if (id && onUpdateOffer) {
       generateImage(id, description, 'Other');
     }
@@ -382,6 +425,23 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 {profile.phone ? (
                   <Text style={styles.profileSub} numberOfLines={1}>{profile.phone}</Text>
                 ) : null}
+
+                <View style={styles.quotaRow}>
+                  <View style={[styles.tierBadge, tier === 'pro' ? styles.tierBadgePro : styles.tierBadgeFree]}>
+                    <Text style={[styles.tierBadgeText, tier === 'pro' ? styles.tierBadgeTextPro : styles.tierBadgeTextFree]}>
+                      {tier === 'pro' ? t('Pro') : t('Free')}
+                    </Text>
+                  </View>
+                  <Text style={styles.quotaText}>
+                    {t('{used}/{limit} posts this month').replace('{used}', String(Math.min(quotaUsed, quotaLimit))).replace('{limit}', String(quotaLimit))}
+                  </Text>
+                  {tier === 'free' && onUpgrade ? (
+                    <Pressable onPress={onUpgrade} style={styles.upgradeLink} hitSlop={8}>
+                      <Text style={styles.upgradeLinkText}>{t('Upgrade')}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+
                 {onDeleteAccount ? (
                   <Pressable
                     onPress={handleDeleteAccount}
@@ -823,6 +883,51 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     textDecorationLine: 'underline',
     textAlign: 'center',
+  },
+  quotaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  tierBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  tierBadgeFree: {
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  tierBadgePro: {
+    borderColor: ACCENT,
+    backgroundColor: ACCENT,
+  },
+  tierBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  tierBadgeTextFree: { color: colors.textSecondary },
+  tierBadgeTextPro: { color: '#fff' },
+  quotaText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  upgradeLink: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  upgradeLinkText: {
+    fontSize: 12,
+    color: ACCENT,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textDecorationLine: 'underline',
   },
 });
 
