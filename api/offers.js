@@ -1,6 +1,6 @@
 // Monthly post quota per tier. Server-enforced so a tampered client can't
 // bypass it. Free tier matches what we advertise on the upgrade screen.
-const POST_QUOTA = { free: 1, pro: 15 };
+const POST_QUOTA = { free: 3, pro: 15 };
 
 function startOfMonthUtcIso() {
   const now = new Date();

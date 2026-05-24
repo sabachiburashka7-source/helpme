@@ -119,8 +119,8 @@ const dict = {
     '{used}/{limit} posts this month': '{used}/{limit} запросов в этом месяце',
     'Upgrade': 'Улучшить',
     'Monthly limit reached': 'Месячный лимит исчерпан',
-    'You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.': 'Вы использовали все {n} бесплатных запросов в этом месяце. Перейдите на Pro — 15 запросов в месяц всего за $1.',
-    'Not now': 'Позже',
+    'You have used all {n} posts allowed this month. Please try again next month.': 'Вы использовали все {n} запросов, доступных в этом месяце. Попробуйте снова в следующем месяце.',
+    'OK': 'ОК',
 
     // Profile screen
     'Profile': 'Профиль',
@@ -242,8 +242,8 @@ const dict = {
     '{used}/{limit} posts this month': '{used}/{limit} მოთხოვნა ამ თვეში',
     'Upgrade': 'გაუმჯობესება',
     'Monthly limit reached': 'თვის ლიმიტი ამოწურულია',
-    'You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.': 'ამ თვის {n} უფასო მოთხოვნა უკვე გამოყენებულია. გადადით Pro-ზე — 15 მოთხოვნა ყოველთვიურად მხოლოდ $1-ად.',
-    'Not now': 'მოგვიანებით',
+    'You have used all {n} posts allowed this month. Please try again next month.': 'ამ თვის ნებადართული {n} მოთხოვნა უკვე გამოყენებულია. სცადეთ შემდეგ თვეში.',
+    'OK': 'კარგი',
 
     // Profile screen
     'Profile': 'პროფილი',

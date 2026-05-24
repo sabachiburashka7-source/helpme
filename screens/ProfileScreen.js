@@ -141,52 +141,39 @@ export default function ProfileScreen({
             {user.phone ? <Text style={styles.identityPhone}>{user.phone}</Text> : null}
           </View>
 
-          {/* Subscription card */}
-          <View style={styles.sectionLabelWrap}>
-            <Text style={styles.sectionLabel}>{t('Subscription')}</Text>
-          </View>
-          <View style={styles.card}>
-            <View style={styles.subRow}>
-              <View style={styles.subLeft}>
-                <View
-                  style={[
-                    styles.tierBadge,
-                    tier === 'pro' ? styles.tierBadgePro : styles.tierBadgeFree,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tierBadgeText,
-                      tier === 'pro' ? styles.tierBadgeTextPro : styles.tierBadgeTextFree,
-                    ]}
-                  >
-                    {tier === 'pro' ? t('Pro') : t('Free')}
-                  </Text>
-                </View>
-                <Text style={styles.subPlanName}>
-                  {tier === 'pro' ? t('15 posts per month') : t('1 post per month')}
-                </Text>
+          {/* Subscription card — only rendered for Pro users. The Pro upgrade
+              flow is hidden in v1 since Google Play Billing isn't wired yet;
+              Pro accounts only exist via manual Supabase toggling in this
+              phase, and they still need a way to cancel. */}
+          {tier === 'pro' ? (
+            <>
+              <View style={styles.sectionLabelWrap}>
+                <Text style={styles.sectionLabel}>{t('Subscription')}</Text>
               </View>
-            </View>
+              <View style={styles.card}>
+                <View style={styles.subRow}>
+                  <View style={styles.subLeft}>
+                    <View style={[styles.tierBadge, styles.tierBadgePro]}>
+                      <Text style={[styles.tierBadgeText, styles.tierBadgeTextPro]}>
+                        {t('Pro')}
+                      </Text>
+                    </View>
+                    <Text style={styles.subPlanName}>{t('15 posts per month')}</Text>
+                  </View>
+                </View>
 
-            {tier === 'pro' && expiry ? (
-              <Text style={styles.subMeta}>
-                {t('Renews on {date}').replace('{date}', expiry)}
-              </Text>
-            ) : null}
+                {expiry ? (
+                  <Text style={styles.subMeta}>
+                    {t('Renews on {date}').replace('{date}', expiry)}
+                  </Text>
+                ) : null}
 
-            {tier === 'pro' ? (
-              <Pressable onPress={handleCancelSubscription} style={styles.subActionGhost}>
-                <Text style={styles.subActionGhostText}>{t('Cancel subscription')}</Text>
-              </Pressable>
-            ) : (
-              <Pressable onPress={onUpgrade} style={styles.subActionPrimary}>
-                <Text style={styles.subActionPrimaryText}>
-                  {t('Upgrade to Pro — $1/month')}
-                </Text>
-              </Pressable>
-            )}
-          </View>
+                <Pressable onPress={handleCancelSubscription} style={styles.subActionGhost}>
+                  <Text style={styles.subActionGhostText}>{t('Cancel subscription')}</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
 
           {/* Account actions */}
           <View style={styles.sectionLabelWrap}>

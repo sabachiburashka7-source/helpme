@@ -167,7 +167,7 @@ function LoadingState() {
   );
 }
 
-const POST_QUOTA = { free: 1, pro: 15 };
+const POST_QUOTA = { free: 3, pro: 15 };
 
 function startOfMonthUtc() {
   const now = new Date();
@@ -195,11 +195,8 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
   function showPaywall() {
     Alert.alert(
       t('Monthly limit reached'),
-      t('You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.').replace('{n}', String(quotaLimit)),
-      [
-        { text: t('Not now'), style: 'cancel' },
-        ...(onUpgrade ? [{ text: t('Upgrade'), onPress: () => onUpgrade() }] : []),
-      ]
+      t('You have used all {n} posts allowed this month. Please try again next month.').replace('{n}', String(quotaLimit)),
+      [{ text: t('OK'), style: 'cancel' }]
     );
   }
 
@@ -388,19 +385,14 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                 ) : null}
 
                 <View style={styles.quotaRow}>
-                  <View style={[styles.tierBadge, tier === 'pro' ? styles.tierBadgePro : styles.tierBadgeFree]}>
-                    <Text style={[styles.tierBadgeText, tier === 'pro' ? styles.tierBadgeTextPro : styles.tierBadgeTextFree]}>
-                      {tier === 'pro' ? t('Pro') : t('Free')}
-                    </Text>
-                  </View>
+                  {tier === 'pro' ? (
+                    <View style={[styles.tierBadge, styles.tierBadgePro]}>
+                      <Text style={[styles.tierBadgeText, styles.tierBadgeTextPro]}>{t('Pro')}</Text>
+                    </View>
+                  ) : null}
                   <Text style={styles.quotaText}>
                     {t('{used}/{limit} posts this month').replace('{used}', String(Math.min(quotaUsed, quotaLimit))).replace('{limit}', String(quotaLimit))}
                   </Text>
-                  {tier === 'free' && onUpgrade ? (
-                    <Pressable onPress={onUpgrade} style={styles.upgradeLink} hitSlop={8}>
-                      <Text style={styles.upgradeLinkText}>{t('Upgrade')}</Text>
-                    </Pressable>
-                  ) : null}
                 </View>
               </View>
             </View>
