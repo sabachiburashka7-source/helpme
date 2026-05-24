@@ -121,6 +121,22 @@ const dict = {
     'Monthly limit reached': 'Месячный лимит исчерпан',
     'You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.': 'Вы использовали все {n} бесплатных запросов в этом месяце. Перейдите на Pro — 15 запросов в месяц всего за $1.',
     'Not now': 'Позже',
+
+    // Profile screen
+    'Profile': 'Профиль',
+    'Back': 'Назад',
+    'Subscription': 'Подписка',
+    'Account': 'Аккаунт',
+    '15 posts per month': '15 запросов в месяц',
+    '1 post per month': '1 запрос в месяц',
+    'Renews on {date}': 'Продлевается {date}',
+    'Cancel subscription': 'Отменить подписку',
+    'Cancel subscription?': 'Отменить подписку?',
+    'You will lose access to the 15-post-per-month Pro plan immediately and drop back to 1 post per month.': 'Вы сразу потеряете доступ к плану Pro (15 запросов в месяц) и вернётесь к 1 запросу в месяц.',
+    'Keep Pro': 'Оставить Pro',
+    'Upgrade to Pro — $1/month': 'Перейти на Pro — $1/мес',
+    'Sign out?': 'Выйти?',
+    'You will need to verify your phone again to sign back in.': 'Чтобы войти снова, потребуется подтвердить номер телефона.',
   },
   ka: {
     // common
@@ -228,6 +244,22 @@ const dict = {
     'Monthly limit reached': 'თვის ლიმიტი ამოწურულია',
     'You have used all {n} free posts this month. Upgrade to Pro for 15 posts every month for just $1.': 'ამ თვის {n} უფასო მოთხოვნა უკვე გამოყენებულია. გადადით Pro-ზე — 15 მოთხოვნა ყოველთვიურად მხოლოდ $1-ად.',
     'Not now': 'მოგვიანებით',
+
+    // Profile screen
+    'Profile': 'პროფილი',
+    'Back': 'უკან',
+    'Subscription': 'გამოწერა',
+    'Account': 'ანგარიში',
+    '15 posts per month': '15 მოთხოვნა თვეში',
+    '1 post per month': '1 მოთხოვნა თვეში',
+    'Renews on {date}': 'განახლდება {date}',
+    'Cancel subscription': 'გამოწერის გაუქმება',
+    'Cancel subscription?': 'გავაუქმოთ გამოწერა?',
+    'You will lose access to the 15-post-per-month Pro plan immediately and drop back to 1 post per month.': 'მაშინვე დაკარგავთ Pro-ის წვდომას (15 მოთხოვნა თვეში) და დაბრუნდებით 1 მოთხოვნაზე თვეში.',
+    'Keep Pro': 'Pro-ის შენარჩუნება',
+    'Upgrade to Pro — $1/month': 'Pro-ზე გადასვლა — $1/თვეში',
+    'Sign out?': 'გავიდეთ?',
+    'You will need to verify your phone again to sign back in.': 'ხელახლა შესასვლელად დაგჭირდებათ ტელეფონის ნომრის დადასტურება.',
   },
 };
 

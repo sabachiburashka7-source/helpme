@@ -126,6 +126,32 @@ module.exports = async function handler(req, res) {
     return res.json({ ok: true });
   }
 
+  if (action === 'cancel_subscription') {
+    // Phase 1: manual / test downgrade. When Google Play Billing is live the
+    // app deep-links to Google's "Manage subscription" screen instead — and
+    // Google's RTDN webhook is what flips tier='free' here, not this action.
+    if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
+      return res.status(400).json({ error: 'Enter a valid phone number' });
+    }
+    const patched = await callSupabase(
+      `/rest/v1/users?phone=eq.${encodeURIComponent(cleanPhone)}&select=${USER_SELECT}`,
+      {
+        method: 'PATCH',
+        headers: { ...baseHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify({ tier: 'free', subscription_expires_at: null }),
+      }
+    );
+    if (!patched.ok) {
+      return res.status(patched.status).json({
+        error: supabaseError(patched.data, 'Could not cancel subscription'),
+        supabase: patched.data,
+      });
+    }
+    const row = Array.isArray(patched.data) ? patched.data[0] : patched.data;
+    if (!row) return res.status(404).json({ error: 'No account found' });
+    return res.json(shapeUser(row));
+  }
+
   if (action === 'me') {
     // Lightweight "who am I" used on app start to refresh the locally
     // cached user (tier may have changed since last login: subscription

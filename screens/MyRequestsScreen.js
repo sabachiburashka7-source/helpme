@@ -13,6 +13,7 @@ import { apiUrl } from '../components/apiBase';
 import { getCurrentLocation } from '../components/location';
 import { BgImage } from '../components/BgImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ProfileScreen from './ProfileScreen';
 
 const MAX_OFFER_IMAGES = 6;
 const ACCENT = '#7A1230';
@@ -182,8 +183,9 @@ function postsThisMonthCount(offers) {
   }).length;
 }
 
-export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onUpgrade, onUpdateProfileImage }) {
+export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onCancelSubscription, onUpgrade, onUpdateProfileImage }) {
   const { t, lang } = useTranslation();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const tier = user?.tier === 'pro' ? 'pro' : 'free';
   const quotaLimit = POST_QUOTA[tier];
@@ -197,45 +199,6 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
       [
         { text: t('Not now'), style: 'cancel' },
         ...(onUpgrade ? [{ text: t('Upgrade'), onPress: () => onUpgrade() }] : []),
-      ]
-    );
-  }
-
-  function handleDeleteAccount() {
-    if (!onDeleteAccount) return;
-    // Two-step Android-standard confirmation. No password/OTP — matches the
-    // rest of the app's trust model (logged-in device = authoritative).
-    Alert.alert(
-      t('Delete account?'),
-      t('This permanently removes your profile, all requests you have posted, and any photos. This cannot be undone.'),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Continue'),
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              t('Are you sure?'),
-              t('There is no recovery. Tap Delete to permanently remove your account.'),
-              [
-                { text: t('Cancel'), style: 'cancel' },
-                {
-                  text: t('Delete'),
-                  style: 'destructive',
-                  onPress: async () => {
-                    const result = await onDeleteAccount();
-                    if (!result?.ok) {
-                      Alert.alert(
-                        t('Something went wrong'),
-                        result?.error || t('Network error. Try again.')
-                      );
-                    }
-                  },
-                },
-              ]
-            );
-          },
-        },
       ]
     );
   }
@@ -392,9 +355,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
               <View style={styles.hero}>
                 <View style={styles.heroTopRow}>
                   <LanguageSwitcher />
-                  {onLogout ? (
-                    <OutlinePill title={t('Sign out')} onPress={onLogout} />
-                  ) : <View />}
+                  <OutlinePill title={t('Profile')} onPress={() => setProfileOpen(true)} />
                 </View>
 
                 <Pressable
@@ -441,17 +402,6 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                     </Pressable>
                   ) : null}
                 </View>
-
-                {onDeleteAccount ? (
-                  <Pressable
-                    onPress={handleDeleteAccount}
-                    style={styles.dangerLink}
-                    hitSlop={8}
-                    accessibilityLabel={t('Delete account')}
-                  >
-                    <Text style={styles.dangerLinkText}>{t('Delete account')}</Text>
-                  </Pressable>
-                ) : null}
               </View>
             </View>
           </FadeInUp>
@@ -637,6 +587,16 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
           )}
         </View>
       </KeyboardAvoidingView>
+
+      <ProfileScreen
+        visible={profileOpen}
+        user={user}
+        onClose={() => setProfileOpen(false)}
+        onLogout={onLogout}
+        onDeleteAccount={onDeleteAccount}
+        onCancelSubscription={onCancelSubscription}
+        onUpgrade={onUpgrade}
+      />
     </SafeAreaView>
   );
 }
@@ -871,18 +831,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '700',
     lineHeight: 14,
-  },
-  dangerLink: {
-    marginTop: 10,
-    paddingVertical: 4,
-  },
-  dangerLinkText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    color: colors.textTertiary,
-    textDecorationLine: 'underline',
-    textAlign: 'center',
   },
   quotaRow: {
     flexDirection: 'row',

@@ -189,6 +189,25 @@ function AppInner() {
     return tempId;
   }
 
+  async function cancelSubscription() {
+    if (!user) return { ok: false, error: 'Not signed in' };
+    try {
+      const r = await fetch(apiUrl('/api/auth'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_subscription', phone: user.phone }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return { ok: false, error: data?.error || 'Could not cancel subscription' };
+      const merged = { ...user, ...data };
+      persistUser(merged);
+      setUser(merged);
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Network error. Try again.' };
+    }
+  }
+
   function handleUpgrade() {
     // Placeholder until Google Play Billing is wired up. See
     // supabase/migrations/001_add_subscription.sql for the schema and the
@@ -279,6 +298,7 @@ function AppInner() {
               onRemoveOffer={removeOffer}
               onLogout={handleLogout}
               onDeleteAccount={deleteAccount}
+              onCancelSubscription={cancelSubscription}
               onUpgrade={handleUpgrade}
               onUpdateProfileImage={updateProfileImage}
             />
