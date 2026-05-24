@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Animated, Easing,
-  KeyboardAvoidingView, Platform, ScrollView, Pressable,
+  KeyboardAvoidingView, Platform, ScrollView, Pressable, Image,
 } from 'react-native';
 import { colors, shadows } from '../components/theme';
 import FadeInUp from '../components/FadeInUp';
@@ -296,19 +296,17 @@ export default function AuthScreen({ onAuthenticated }) {
 
           <FadeInUp>
             <View style={styles.header}>
-              <View style={styles.logoRing}>
-                <View style={[styles.logoDot, liveDark]}>
-                  <Text style={styles.logoLetter}>K</Text>
-                </View>
-              </View>
-              <Text style={styles.brand}>Kheli</Text>
-              <Text style={styles.tagline}>
-                {step === 'code'
-                  ? t('We sent a code to {phone}').replace('{phone}', phoneE164)
-                  : isRegister
-                  ? t('Create your account in seconds')
-                  : t('Welcome back — sign in to continue')}
-              </Text>
+              <Image
+                source={require('../assets/icon.png')}
+                style={styles.brandLogo}
+                resizeMode="contain"
+              />
+              <Text style={styles.brand}>kheli</Text>
+              {step === 'code' ? (
+                <Text style={styles.tagline}>
+                  {t('We sent a code to {phone}').replace('{phone}', phoneE164)}
+                </Text>
+              ) : null}
             </View>
           </FadeInUp>
 
@@ -485,6 +483,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 22,
   },
+  brandLogo: {
+    width: 96,
+    height: 96,
+    marginBottom: 14,
+    borderRadius: 22,
+  },
   logoRing: {
     width: 72,
     height: 72,
@@ -512,10 +516,11 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   brand: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: -0.8,
+    fontSize: 42,
+    fontWeight: '500',
+    color: ACCENT,
+    letterSpacing: 1.2,
+    lineHeight: 46,
   },
   tagline: {
     fontSize: 13,
