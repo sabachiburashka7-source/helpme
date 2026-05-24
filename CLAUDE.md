@@ -162,8 +162,11 @@ show an overlay. Preserve this debugging.
 
 - Project: `helpme` (team: `lepton-projects3`).
 - Production URL: `https://helpme-jade-tau.vercel.app`.
-- API functions: `api/auth.js`, `api/offers.js`, `api/generate-image.js`.
-- `vercel.json` only routes `/api/*` — no static content is served.
+- API functions: `api/auth.js`, `api/offers.js`, `api/generate-image.js`,
+  `api/delete-account.js`, `api/privacy.js` (HTML privacy policy served at
+  `/privacy` — this URL goes in the Play Console listing).
+- `vercel.json` routes `/api/*` plus `/privacy` and `/delete-account` — no
+  general static content is served.
 - Auto-deploys on push to main.
 
 ### Environment variables (Vercel -> Project Settings -> Environment Variables)
@@ -206,11 +209,16 @@ show an overlay. Preserve this debugging.
 | Map renders (both picker and details view) | Done |
 | Safe area / sizing correct | Done |
 | Web client removed | Done |
-| Generate real release keystore + reconfigure `signingConfigs.release` | **TODO** |
-| Build production AAB (`./gradlew bundleRelease`) | **TODO** |
-| Privacy Policy URL hosted | TODO (user task) |
-| Play Console account + listing | TODO (user task) |
-| Closed testing (14 days, 12+ testers) | TODO (user task) |
+| Rebrand to "Kheli" (name, icon, splash, adaptive icon) | Done |
+| Generate real release keystore + reconfigure `signingConfigs.release` | Done (`android/app/helpme-release.keystore`, loaded via `android/keystore.properties`, both gitignored) |
+| Build production AAB (`./gradlew bundleRelease`) | Done (`android/app/build/outputs/bundle/release/app-release.aab`) |
+| Privacy Policy URL hosted | Done (https://helpme-jade-tau.vercel.app/privacy via `api/privacy.js`) |
+| In-app account deletion | Done (`/api/delete-account` + Profile screen) |
+| Subscription quota (3 free posts/month, Pro UI hidden for v1) | Done |
+| **Back up keystore + `keystore.properties` off-machine** | **TODO (user task — if lost, app can never be updated on Play Store)** |
+| Bump `expo.android.versionCode` (and matching value in `android/app/build.gradle`) before every upload after the first | Ongoing |
+| Play Console account + app listing (title, descriptions, screenshots, feature graphic, content rating, data safety form, privacy URL) | TODO (user task) |
+| Closed testing track — 12+ testers, 14 continuous days, before production rollout | TODO (user task) |
 
 ## Common debug recipes
 
