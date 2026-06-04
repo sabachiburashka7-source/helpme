@@ -137,6 +137,11 @@ const dict = {
     'Upgrade to Pro — $1/month': 'Перейти на Pro — $1/мес',
     'Sign out?': 'Выйти?',
     'You will need to verify your phone again to sign back in.': 'Чтобы войти снова, потребуется подтвердить номер телефона.',
+
+    // Legal
+    'Legal': 'Правовая информация',
+    'Privacy Policy': 'Политика конфиденциальности',
+    'By continuing you agree to our ': 'Продолжая, вы соглашаетесь с нашей ',
   },
   ka: {
     // common
@@ -260,6 +265,11 @@ const dict = {
     'Upgrade to Pro — $1/month': 'Pro-ზე გადასვლა — $1/თვეში',
     'Sign out?': 'გავიდეთ?',
     'You will need to verify your phone again to sign back in.': 'ხელახლა შესასვლელად დაგჭირდებათ ტელეფონის ნომრის დადასტურება.',
+
+    // Legal
+    'Legal': 'სამართლებრივი',
+    'Privacy Policy': 'კონფიდენციალურობის პოლიტიკა',
+    'By continuing you agree to our ': 'გაგრძელებით თქვენ ეთანხმებით ჩვენს ',
   },
 };
 

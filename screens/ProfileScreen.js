@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Alert, Modal } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Alert, Modal, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, typography } from '../components/theme';
 import { useTranslation } from '../components/i18n';
 import { BgImage } from '../components/BgImage';
 import { isImageUrl } from '../components/profileImage';
+import { apiUrl } from '../components/apiBase';
 
 const ACCENT = '#7A1230';
 
@@ -56,6 +57,12 @@ export default function ProfileScreen({
         },
       ]
     );
+  }
+
+  function openPrivacy() {
+    Linking.openURL(apiUrl('/privacy')).catch(() => {
+      Alert.alert(t('Something went wrong'), t('Network error. Try again.'));
+    });
   }
 
   function handleLogout() {
@@ -188,6 +195,18 @@ export default function ProfileScreen({
             <Pressable onPress={handleDelete} style={styles.row}>
               <Text style={[styles.rowText, styles.rowTextDanger]}>{t('Delete account')}</Text>
               <Text style={[styles.rowChevron, styles.rowTextDanger]}>›</Text>
+            </Pressable>
+          </View>
+
+          {/* Legal — Google Play requires the privacy policy to be reachable
+              from inside the app, not only from the Play Store listing. */}
+          <View style={styles.sectionLabelWrap}>
+            <Text style={styles.sectionLabel}>{t('Legal')}</Text>
+          </View>
+          <View style={styles.card}>
+            <Pressable onPress={openPrivacy} style={styles.row}>
+              <Text style={styles.rowText}>{t('Privacy Policy')}</Text>
+              <Text style={styles.rowChevron}>›</Text>
             </Pressable>
           </View>
         </ScrollView>

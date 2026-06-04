@@ -2,11 +2,20 @@
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.INTERNET"/>
-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-  <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+  <!-- Legacy shared-storage access for old Android only. On API 33+ expo-image-picker
+       uses the system photo picker (no permission needed), so we cap these and use
+       tools:node="replace" to override the uncapped declarations expo-image-picker
+       merges in. Keeps Play from flagging broad storage access on modern devices. -->
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:node="replace"/>
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" tools:node="replace"/>
+  <!-- RECORD_AUDIO and SYSTEM_ALERT_WINDOW intentionally NOT declared: the app
+       records no audio, and draw-over-other-apps is only used by React Native's
+       debug red-box (which ships in its own debug-variant manifest). Leaving them
+       out of the release manifest avoids sensitive-permission declarations and
+       Data Safety mismatches at Play submission. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove"/>
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" tools:node="remove"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>

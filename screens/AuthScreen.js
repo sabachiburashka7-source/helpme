@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Animated, Easing,
-  KeyboardAvoidingView, Platform, ScrollView, Pressable, Image,
+  KeyboardAvoidingView, Platform, ScrollView, Pressable, Image, Linking,
 } from 'react-native';
 import { colors, shadows } from '../components/theme';
 import FadeInUp from '../components/FadeInUp';
@@ -195,6 +195,10 @@ export default function AuthScreen({ onAuthenticated }) {
     } catch (err) {
       flashError(err?.message || t('Could not upload image'));
     }
+  }
+
+  function openPrivacy() {
+    Linking.openURL(apiUrl('/privacy')).catch(() => {});
   }
 
   function switchMode(next) {
@@ -459,6 +463,13 @@ export default function AuthScreen({ onAuthenticated }) {
               )}
             </View>
           </FadeInUp>
+
+          <Text style={styles.legalNote}>
+            {t('By continuing you agree to our ')}
+            <Text style={styles.legalLink} onPress={openPrivacy}>
+              {t('Privacy Policy')}
+            </Text>
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -558,6 +569,20 @@ const styles = StyleSheet.create({
   switchRow: { alignItems: 'center', marginTop: 20, paddingVertical: 6 },
   switchText: { fontSize: 13, color: colors.textSecondary },
   switchTextStrong: { color: ACCENT, fontWeight: '700' },
+
+  legalNote: {
+    marginTop: 22,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textTertiary,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+  legalLink: {
+    color: ACCENT,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
 
   // Avatar picker
   avatarRow: {
