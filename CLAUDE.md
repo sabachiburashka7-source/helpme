@@ -213,6 +213,8 @@ show an overlay. Preserve this debugging.
 | Generate real release keystore + reconfigure `signingConfigs.release` | Done (`android/app/helpme-release.keystore`, loaded via `android/keystore.properties`, both gitignored) |
 | Build production AAB (`./gradlew bundleRelease`) | Done (`android/app/build/outputs/bundle/release/app-release.aab`) |
 | Privacy Policy URL hosted | Done (https://helpme-jade-tau.vercel.app/privacy via `api/privacy.js`) |
+| In-app Privacy Policy link | Done (Profile "Legal" section + Auth consent line, open via native `Linking`) |
+| Trim unused sensitive permissions | Done (removed `RECORD_AUDIO`/`SYSTEM_ALERT_WINDOW`; capped legacy storage perms in `AndroidManifest.xml`) |
 | In-app account deletion | Done (`/api/delete-account` + Profile screen) |
 | Subscription quota (3 free posts/month, Pro UI hidden for v1) | Done |
 | **Back up keystore + `keystore.properties` off-machine** | **TODO (user task — if lost, app can never be updated on Play Store)** |
