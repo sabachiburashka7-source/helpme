@@ -1,3 +1,5 @@
+// Palette is unchanged — the glassmorphism pass only adds translucent
+// derivatives of these exact colors. Do not re-tint the brand here.
 export const colors = {
   bg: '#F7F7F8',
   surface: '#FFFFFF',
@@ -24,11 +26,52 @@ export const colors = {
   shadowStrong: 'rgba(15, 15, 30, 0.18)',
 };
 
+// Translucent versions of the palette above. Glass panels are white at a
+// low alpha so the ambient background reads through them; the bright rim
+// (`stroke`) plus the diagonal `sheen` gradient is what makes a flat
+// translucent rectangle actually look like a pane of glass.
+export const glass = {
+  fill: 'rgba(255, 255, 255, 0.58)',
+  fillStrong: 'rgba(255, 255, 255, 0.78)',
+  fillSoft: 'rgba(255, 255, 255, 0.36)',
+  fillHollow: 'rgba(255, 255, 255, 0.14)',
+
+  stroke: 'rgba(255, 255, 255, 0.75)',
+  strokeSoft: 'rgba(228, 228, 231, 0.9)',
+  strokeInner: 'rgba(255, 255, 255, 0.9)',
+
+  // #7A1230 at low alpha — tinted glass, still the brand color.
+  accentFill: 'rgba(122, 18, 48, 0.09)',
+  accentFillMd: 'rgba(122, 18, 48, 0.15)',
+  accentFillStrong: 'rgba(122, 18, 48, 0.88)',
+  accentStroke: 'rgba(122, 18, 48, 0.22)',
+  accentStrokeStrong: 'rgba(122, 18, 48, 0.42)',
+  accentGlow: 'rgba(122, 18, 48, 0.30)',
+
+  // Smoked glass, for chips laid over photography.
+  darkFill: 'rgba(10, 10, 10, 0.42)',
+  darkFillStrong: 'rgba(10, 10, 10, 0.62)',
+  darkStroke: 'rgba(255, 255, 255, 0.30)',
+
+  dangerFill: 'rgba(220, 38, 38, 0.10)',
+  dangerStroke: 'rgba(220, 38, 38, 0.26)',
+
+  // Diagonal light pass across a panel. Top-left catches the light.
+  sheen: ['rgba(255, 255, 255, 0.60)', 'rgba(255, 255, 255, 0.10)', 'rgba(255, 255, 255, 0)'],
+  sheenSoft: ['rgba(255, 255, 255, 0.34)', 'rgba(255, 255, 255, 0)'],
+  sheenDark: ['rgba(255, 255, 255, 0.22)', 'rgba(255, 255, 255, 0)'],
+
+  // Backdrop behind modal glass.
+  scrim: 'rgba(10, 10, 18, 0.42)',
+};
+
 export const radius = {
-  sm: 8,
-  md: 10,
-  lg: 14,
-  xl: 18,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 26,
+  xxl: 32,
+  glass: 26,
   pill: 999,
 };
 
@@ -58,26 +101,48 @@ export const typography = {
 };
 
 export const shadows = {
+  // Glass floats — wide, soft, low-opacity drops rather than tight ones.
+  glass: {
+    shadowColor: '#0F0F1E',
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
+  },
+  glassLifted: {
+    shadowColor: '#0F0F1E',
+    shadowOpacity: 0.16,
+    shadowRadius: 34,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 10,
+  },
+  glassSubtle: {
+    shadowColor: '#0F0F1E',
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
   card: {
     shadowColor: '#0F0F1E',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  cardHover: {
-    shadowColor: '#0F0F1E',
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
   },
+  cardHover: {
+    shadowColor: '#0F0F1E',
+    shadowOpacity: 0.14,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
+  },
   button: {
     shadowColor: '#7A1230',
-    shadowOpacity: 0.28,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.32,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 7,
   },
 };
 

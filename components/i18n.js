@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius } from './theme';
+import { colors, glass, radius } from './theme';
 import * as Storage from './storage';
 
 const STORAGE_KEY = 'helpme.lang';
@@ -358,25 +358,32 @@ const switcherStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 4,
-    backgroundColor: colors.surface,
+    backgroundColor: glass.fillSoft,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: glass.stroke,
     borderRadius: radius.pill,
-    padding: 2,
+    padding: 3,
   },
-  rowMd: { gap: 6, padding: 3 },
+  rowMd: { gap: 6, padding: 4 },
   chip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: radius.pill,
   },
-  chipMd: { paddingHorizontal: 12, paddingVertical: 5 },
-  chipActive: { backgroundColor: colors.accent },
-  chipHover: { backgroundColor: colors.surfaceAlt },
+  chipMd: { paddingHorizontal: 13, paddingVertical: 6 },
+  chipActive: {
+    backgroundColor: glass.accentFillStrong,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  chipHover: { backgroundColor: glass.fillStrong },
   text: {
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     color: colors.textSecondary,
   },
   textMd: { fontSize: 12 },

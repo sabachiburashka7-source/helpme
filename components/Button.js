@@ -1,27 +1,11 @@
+// Legacy button API, re-skinned on top of the glass primitives so older
+// call sites keep working. New code should reach for `GlassButton` /
+// `GlassIconButton` in ./Glass directly.
+
 import React, { useRef } from 'react';
-import {
-  Animated, Pressable, StyleSheet, Text, View, ActivityIndicator,
-} from 'react-native';
-import { colors, radius, shadows } from './theme';
-
-const SCALE_PRESSED = 0.97;
-const SCALE_REST = 1;
-
-function usePressAnim() {
-  const scale = useRef(new Animated.Value(SCALE_REST)).current;
-  const animate = (to) =>
-    Animated.spring(scale, {
-      toValue: to,
-      useNativeDriver: true,
-      speed: 40,
-      bounciness: 6,
-    }).start();
-  return {
-    scale,
-    onPressIn: () => animate(SCALE_PRESSED),
-    onPressOut: () => animate(SCALE_REST),
-  };
-}
+import { Animated, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { colors, radius } from './theme';
+import { GlassButton, GlassSurface, usePressScale } from './Glass';
 
 export function Button({
   title,
@@ -34,112 +18,44 @@ export function Button({
   icon = null,
   fullWidth = true,
 }) {
-  const { scale, onPressIn, onPressOut } = usePressAnim();
-
-  const isPrimary = variant === 'primary';
-  const isGhost = variant === 'ghost';
-  const isOutline = variant === 'outline';
-
+  const mapped =
+    variant === 'primary' ? 'primary' : variant === 'outline' ? 'glass' : 'ghost';
   return (
-    <Animated.View
-      style={[
-        { transform: [{ scale }] },
-        fullWidth && { alignSelf: 'stretch' },
-        style,
-      ]}
-    >
-      <Pressable
-        onPress={onPress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        disabled={disabled || loading}
-        style={({ hovered }) => [
-          styles.base,
-          size === 'sm' && styles.sm,
-          size === 'md' && styles.md,
-          size === 'lg' && styles.lg,
-          isPrimary && styles.primary,
-          isPrimary && hovered && styles.primaryHover,
-          isPrimary && !disabled && shadows.button,
-          isOutline && styles.outline,
-          isOutline && hovered && styles.outlineHover,
-          isGhost && styles.ghost,
-          isGhost && hovered && styles.ghostHover,
-          (disabled || loading) && styles.disabled,
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator color={isPrimary ? '#fff' : colors.accent} size="small" />
-        ) : (
-          <View style={styles.row}>
-            {icon ? <View style={styles.icon}>{icon}</View> : null}
-            <Text
-              style={[
-                styles.text,
-                isPrimary && styles.textPrimary,
-                isOutline && styles.textOutline,
-                isGhost && styles.textGhost,
-                size === 'sm' && styles.textSm,
-              ]}
-            >
-              {title}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-    </Animated.View>
+    <GlassButton
+      title={title}
+      onPress={onPress}
+      variant={mapped}
+      size={size}
+      loading={loading}
+      disabled={disabled}
+      style={[fullWidth && { alignSelf: 'stretch' }, style]}
+    />
   );
 }
 
-export function IconButton({ children, onPress, style, hoverStyle, activeBg }) {
-  const { scale, onPressIn, onPressOut } = usePressAnim();
+export function IconButton({ children, onPress, style, activeBg }) {
+  const { scale, onPressIn, onPressOut } = usePressScale(0.92);
   return (
     <Animated.View style={[{ transform: [{ scale }] }, style]}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        style={({ hovered }) => [
-          styles.iconBtn,
-          activeBg && { backgroundColor: activeBg },
-          hovered && (hoverStyle || styles.iconBtnHover),
-        ]}
-      >
-        {children}
+      <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
+        <GlassSurface
+          tone="strong"
+          radius={radius.pill}
+          shadow="subtle"
+          style={[styles.iconBtn, activeBg && { backgroundColor: activeBg }]}
+        >
+          {children}
+        </GlassSurface>
       </Pressable>
     </Animated.View>
   );
 }
 
-export function PressableScale({ children, onPress, style, hoverLift = false }) {
-  const { scale, onPressIn, onPressOut } = usePressAnim();
-  const lift = useRef(new Animated.Value(0)).current;
-
+export function PressableScale({ children, onPress, style }) {
+  const { scale, onPressIn, onPressOut } = usePressScale(0.98);
   return (
-    <Animated.View
-      style={[
-        {
-          transform: [
-            { scale },
-            { translateY: lift },
-          ],
-        },
-        style,
-      ]}
-    >
-      <Pressable
-        onPress={onPress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        onHoverIn={() =>
-          hoverLift &&
-          Animated.timing(lift, { toValue: -3, duration: 180, useNativeDriver: true }).start()
-        }
-        onHoverOut={() =>
-          hoverLift &&
-          Animated.timing(lift, { toValue: 0, duration: 180, useNativeDriver: true }).start()
-        }
-      >
+    <Animated.View style={[{ transform: [{ scale }] }, style]}>
+      <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
         {children}
       </Pressable>
     </Animated.View>
@@ -147,48 +63,10 @@ export function PressableScale({ children, onPress, style, hoverLift = false }) 
 }
 
 const styles = StyleSheet.create({
-  base: {
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sm: { paddingVertical: 9, paddingHorizontal: 14 },
-  md: { paddingVertical: 13, paddingHorizontal: 18 },
-  lg: { paddingVertical: 15, paddingHorizontal: 22 },
-
-  primary: { backgroundColor: colors.accent },
-  primaryHover: { backgroundColor: colors.accentHover },
-
-  outline: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  outlineHover: {
-    backgroundColor: colors.surfaceAlt,
-    borderColor: colors.borderStrong,
-  },
-
-  ghost: { backgroundColor: 'transparent' },
-  ghostHover: { backgroundColor: colors.surfaceAlt },
-
-  disabled: { opacity: 0.55 },
-
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  icon: { marginRight: 8 },
-
-  text: { fontSize: 14, fontWeight: '600', letterSpacing: 0.1 },
-  textPrimary: { color: '#fff' },
-  textOutline: { color: colors.text },
-  textGhost: { color: colors.textSecondary },
-  textSm: { fontSize: 13 },
-
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnHover: { backgroundColor: colors.surfaceAlt },
 });

@@ -4,13 +4,14 @@
 
 import React from 'react';
 import { View, Image, Text, StyleSheet } from 'react-native';
+import { colors } from './theme';
 
 export function BgImage({
   source,
   resizeMode = 'cover',
   placeholderText,
-  placeholderBg = '#E4E2EC',
-  placeholderTextColor = '#7A7596',
+  placeholderBg = colors.surfaceAlt,
+  placeholderTextColor = colors.textTertiary,
   style,
   children,
 }) {

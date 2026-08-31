@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { colors, radius } from './theme';
+import { colors, glass, radius } from './theme';
 
 // MapLibre runs inside a WebView. We host its JS/CSS from unpkg and use
 // openfreemap tiles — no Google API key needed.
@@ -171,10 +171,8 @@ export default function MapPicker({
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
   },
   overlay: {
@@ -185,7 +183,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(244,242,250,0.85)',
+    backgroundColor: glass.fillStrong,
   },
   overlayText: {
     fontSize: 12,

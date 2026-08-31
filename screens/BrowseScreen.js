@@ -3,8 +3,7 @@ import {
   View, Text, ScrollView, Modal, Animated, Easing,
   StyleSheet, Linking, TextInput, Pressable,
 } from 'react-native';
-import { colors, radius, shadows, typography } from '../components/theme';
-import { Button, PressableScale } from '../components/Button';
+import { colors, glass, radius, typography } from '../components/theme';
 import FadeInUp from '../components/FadeInUp';
 import { useTranslation } from '../components/i18n';
 import { isImageUrl } from '../components/profileImage';
@@ -12,7 +11,12 @@ import { reverseGeocode, getCachedLocationName, isPinnedCoordinateString } from 
 import { getCurrentLocation } from '../components/location';
 import { BgImage } from '../components/BgImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import MapPicker from '../components/MapPicker';
+import {
+  AmbientBackground, BlurSurface, GlassSurface, GlassChip, GlassButton,
+  PressableGlass, usePressScale,
+} from '../components/Glass';
 
 function useDisplayLocation(offer) {
   const { lang } = useTranslation();
@@ -44,11 +48,9 @@ function useDisplayLocation(offer) {
   return name;
 }
 
-// Solid-fill accents — the animated gradient + SVG sand-dissolve effects
-// were web-only and removed when we dropped web support.
-const liveDark = { backgroundColor: '#7A1230' };
+const HEADER_HEIGHT = 72;
+const SEARCH_PANEL_HEIGHT = 148;
 
-const HEADER_HEIGHT = 64;
 const buildRadiusOptions = (t) => [
   { value: null, label: t('Any') },
   { value: 1, label: '1 km' },
@@ -73,6 +75,7 @@ function haversineKm(a, b) {
 export default function BrowseScreen({ dbOffers, loading }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -100,7 +103,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
     if (!headerVisible.current) return;
     headerVisible.current = false;
     Animated.spring(headerOffset, {
-      toValue: -HEADER_HEIGHT,
+      toValue: -(HEADER_HEIGHT + insets.top),
       useNativeDriver: true,
       speed: 16,
       bounciness: 0,
@@ -151,15 +154,16 @@ export default function BrowseScreen({ dbOffers, loading }) {
     return true;
   });
 
-  const headerOpacity = headerOffset.interpolate({
-    inputRange: [-HEADER_HEIGHT, -HEADER_HEIGHT / 2, 0],
-    outputRange: [0, 0.4, 1],
-  });
-
   return (
-    <View style={styles.container}>
+    <AmbientBackground>
       <ScrollView
-        contentContainerStyle={[styles.list, { paddingTop: HEADER_HEIGHT + 8 + insets.top }]}
+        contentContainerStyle={[
+          styles.list,
+          {
+            paddingTop: HEADER_HEIGHT + insets.top + 14,
+            paddingBottom: tabBarHeight + 24,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -168,11 +172,10 @@ export default function BrowseScreen({ dbOffers, loading }) {
           loading ? (
             <LoadingState />
           ) : (
-            <View style={styles.empty}>
-              <View style={styles.emptyDot} />
-              <Text style={styles.emptyTitle}>{t('No matches')}</Text>
-              <Text style={styles.emptySub}>{t('Try a different search')}</Text>
-            </View>
+            <EmptyState
+              title={t('No matches')}
+              subtitle={t('Try a different search')}
+            />
           )
         )}
         {filtered.map((offer, i) => (
@@ -180,76 +183,82 @@ export default function BrowseScreen({ dbOffers, loading }) {
             <OfferCard offer={offer} onPress={() => setSelected(offer)} />
           </FadeInUp>
         ))}
-        <View style={{ height: 24 }} />
       </ScrollView>
 
       <Animated.View
         pointerEvents="box-none"
         style={[
           styles.headerFloat,
-          {
-            paddingTop: insets.top,
-            opacity: headerOpacity,
-            transform: [{ translateY: headerOffset }],
-          },
+          { transform: [{ translateY: headerOffset }] },
         ]}
       >
-        <View style={styles.headerBar}>
-          <View>
-            <Text style={styles.headerTitle}>{t('Browse')}</Text>
-            <Text style={styles.headerSub}>
-              {filtered.length} {filtered.length === 1 ? t('request') : t('requests')}
-              {radiusKm != null && userCoords ? ` · ${t('within')} ${radiusKm} km` : ` · ${t('nearby')}`}
-            </Text>
-          </View>
-          <FilterButton
-            open={filterOpen}
-            onPress={() => {
-              if (filterOpen) {
-                setSearch('');
-              }
-              setFilterOpen((v) => !v);
-            }}
-          />
-        </View>
+        <BlurSurface tone="soft" intensity={38} style={styles.headerBlur}>
+          <View style={[styles.headerInner, { paddingTop: insets.top }]}>
+            <View style={styles.headerBar}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerTitle}>{t('Browse')}</Text>
+                <Text style={styles.headerSub}>
+                  {filtered.length} {filtered.length === 1 ? t('request') : t('requests')}
+                  {radiusKm != null && userCoords ? ` · ${t('within')} ${radiusKm} km` : ` · ${t('nearby')}`}
+                </Text>
+              </View>
+              <FilterButton
+                open={filterOpen}
+                onPress={() => {
+                  if (filterOpen) setSearch('');
+                  setFilterOpen((v) => !v);
+                }}
+              />
+            </View>
 
-        <SearchBar
-          open={filterOpen}
-          value={search}
-          onChange={setSearch}
-          radiusKm={radiusKm}
-          onPickRadius={pickRadius}
-          locStatus={locStatus}
-          locError={locError}
-          t={t}
-        />
+            <SearchPanel
+              open={filterOpen}
+              value={search}
+              onChange={setSearch}
+              radiusKm={radiusKm}
+              onPickRadius={pickRadius}
+              locStatus={locStatus}
+              locError={locError}
+              t={t}
+            />
+          </View>
+          <View pointerEvents="none" style={styles.headerHairline} />
+        </BlurSurface>
       </Animated.View>
 
       <DetailsModal offer={selected} onClose={() => setSelected(null)} />
-    </View>
+    </AmbientBackground>
+  );
+}
+
+function EmptyState({ title, subtitle, pulseDot = false }) {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    if (!pulseDot) return undefined;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, pulseDot]);
+
+  return (
+    <GlassSurface tone="light" radius={30} shadow="base" style={styles.emptyCard}>
+      <Animated.View style={[styles.emptyOrb, pulseDot && { opacity: pulse }]}>
+        <View style={styles.emptyOrbCore} />
+      </Animated.View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptySub}>{subtitle}</Text>
+    </GlassSurface>
   );
 }
 
 function LoadingState() {
   const { t } = useTranslation();
-  const pulse = useRef(new Animated.Value(0.4)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.4, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-  return (
-    <View style={styles.empty}>
-      <Animated.View style={[styles.emptyDot, { opacity: pulse }]} />
-      <Text style={styles.emptyTitle}>{t('Loading requests…')}</Text>
-      <Text style={styles.emptySub}>{t('Hang tight')}</Text>
-    </View>
-  );
+  return <EmptyState title={t('Loading requests…')} subtitle={t('Hang tight')} pulseDot />;
 }
 
 function SearchGlyph({ color }) {
@@ -272,6 +281,8 @@ function CloseGlyph({ color }) {
 
 function FilterButton({ open, onPress }) {
   const anim = useRef(new Animated.Value(0)).current;
+  const { scale, onPressIn, onPressOut } = usePressScale(0.9);
+
   useEffect(() => {
     Animated.spring(anim, {
       toValue: open ? 1 : 0,
@@ -287,16 +298,26 @@ function FilterButton({ open, onPress }) {
   const closeScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
 
   return (
-    <PressableScale onPress={onPress} hoverLift>
-      <View style={[styles.filterBtn, open && styles.filterBtnActive]}>
-        <Animated.View style={[glyphStyles.layer, { opacity: searchOpacity, transform: [{ scale: searchScale }] }]}>
-          <SearchGlyph color="#fff" />
-        </Animated.View>
-        <Animated.View style={[glyphStyles.layer, { opacity: closeOpacity, transform: [{ scale: closeScale }] }]}>
-          <CloseGlyph color="#fff" />
-        </Animated.View>
-      </View>
-    </PressableScale>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
+        <GlassSurface
+          tone={open ? 'accent' : 'strong'}
+          radius={radius.pill}
+          shadow="base"
+          style={[
+            styles.filterBtn,
+            open && { backgroundColor: colors.accent, borderColor: glass.accentStrokeStrong },
+          ]}
+        >
+          <Animated.View style={[glyphStyles.layer, { opacity: searchOpacity, transform: [{ scale: searchScale }] }]}>
+            <SearchGlyph color={colors.accent} />
+          </Animated.View>
+          <Animated.View style={[glyphStyles.layer, { opacity: closeOpacity, transform: [{ scale: closeScale }] }]}>
+            <CloseGlyph color="#fff" />
+          </Animated.View>
+        </GlassSurface>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -342,7 +363,7 @@ const glyphStyles = StyleSheet.create({
   },
 });
 
-function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, locError, t }) {
+function SearchPanel({ open, value, onChange, radiusKm, onPickRadius, locStatus, locError, t }) {
   const RADIUS_OPTIONS = buildRadiusOptions(t);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -358,12 +379,12 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
     <Animated.View
       style={{
         opacity: anim,
-        height: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 130] }),
+        height: anim.interpolate({ inputRange: [0, 1], outputRange: [0, SEARCH_PANEL_HEIGHT] }),
         overflow: 'hidden',
       }}
     >
-      <View style={styles.searchWrap}>
-        <Text style={styles.searchIcon}>⌕</Text>
+      <GlassSurface tone="strong" radius={radius.lg} shadow="subtle" style={styles.searchWrap}>
+        <SearchGlyph color={colors.textTertiary} />
         <TextInput
           style={styles.search}
           placeholder={t('Search requests…')}
@@ -372,30 +393,28 @@ function SearchBar({ open, value, onChange, radiusKm, onPickRadius, locStatus, l
           onChangeText={onChange}
           autoFocus={open}
         />
-      </View>
+      </GlassSurface>
+
       <View style={styles.radiusRow}>
         <Text style={styles.radiusLabel}>{t('Radius')}</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.radiusChips}
-        >
-          {RADIUS_OPTIONS.map((opt) => {
-            const active = radiusKm === opt.value;
-            return (
-              <Pressable
-                key={String(opt.value)}
-                onPress={() => onPickRadius(opt.value)}
-                style={[styles.radiusChip, active && styles.radiusChipActive]}
-              >
-                <Text style={[styles.radiusChipText, active && styles.radiusChipTextActive]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
       </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.radiusChips}
+        keyboardShouldPersistTaps="handled"
+      >
+        {RADIUS_OPTIONS.map((opt) => (
+          <GlassChip
+            key={String(opt.value)}
+            label={opt.label}
+            active={radiusKm === opt.value}
+            onPress={() => onPickRadius(opt.value)}
+            style={{ marginRight: 8 }}
+          />
+        ))}
+      </ScrollView>
+
       {locStatus === 'loading' ? (
         <Text style={styles.radiusHint}>{t('Getting your location…')}</Text>
       ) : locStatus === 'error' ? (
@@ -409,33 +428,44 @@ function OfferCard({ offer, onPress }) {
   const { t } = useTranslation();
   const displayLocation = useDisplayLocation(offer);
   return (
-    <PressableScale onPress={onPress} hoverLift style={styles.cardWrap}>
+    <PressableGlass onPress={onPress} style={styles.cardWrap} scaleTo={0.985}>
       <View style={styles.card}>
-        <BgImage
-          source={offer.image}
-          resizeMode="cover"
-          placeholderText={offer.category}
-          style={styles.cardImage}
-        >
-          {offer.generatingImage && !offer.image ? (
-            <View style={styles.imageLoadingBadge}>
-              <View style={styles.spinDot} />
-              <Text style={styles.imageLoadingText}>{t('Generating image…')}</Text>
-            </View>
-          ) : null}
-          <View style={styles.cardPriceTag}>
+        <View style={styles.cardImageFrame}>
+          <BgImage
+            source={offer.image}
+            resizeMode="cover"
+            placeholderText={offer.category}
+            style={styles.cardImage}
+          >
+            {offer.generatingImage && !offer.image ? (
+              <GlassSurface tone="strong" radius={radius.pill} shadow="subtle" style={styles.imageLoadingBadge}>
+                <View style={styles.spinDot} />
+                <Text style={styles.imageLoadingText}>{t('Generating image…')}</Text>
+              </GlassSurface>
+            ) : null}
+          </BgImage>
+          <GlassSurface
+            tone="dark"
+            radius={radius.pill}
+            shadow="subtle"
+            style={styles.cardPriceTag}
+          >
             <Text style={styles.cardPriceTagText}>₾{offer.price}</Text>
-          </View>
-        </BgImage>
-        <View style={styles.cardBody}>
+          </GlassSurface>
+        </View>
+
+        <GlassSurface tone="strong" radius={26} shadow="base" style={styles.cardPanel}>
           <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
           <View style={styles.cardBottomRow}>
-            <Text style={styles.cardName}>{offer.name}</Text>
-            <Text style={styles.cardLoc} numberOfLines={1}>{displayLocation}</Text>
+            <Text style={styles.cardName} numberOfLines={1}>{offer.name}</Text>
+            <View style={styles.cardLocWrap}>
+              <View style={styles.locDot} />
+              <Text style={styles.cardLoc} numberOfLines={1}>{displayLocation}</Text>
+            </View>
           </View>
-        </View>
+        </GlassSurface>
       </View>
-    </PressableScale>
+    </PressableGlass>
   );
 }
 
@@ -445,13 +475,15 @@ function OfferMap({ offer, t }) {
   const linkHref = `https://www.google.com/maps/search/?api=1&query=${offer.latitude},${offer.longitude}`;
   return (
     <View style={styles.mapWrap}>
-      <MapPicker
-        latitude={offer.latitude}
-        longitude={offer.longitude}
-        onChange={() => {}}
-        draggable={false}
-        height={200}
-      />
+      <View style={styles.mapFrame}>
+        <MapPicker
+          latitude={offer.latitude}
+          longitude={offer.longitude}
+          onChange={() => {}}
+          draggable={false}
+          height={200}
+        />
+      </View>
       <Pressable onPress={() => Linking.openURL(linkHref)} style={styles.mapOpenBtn}>
         <Text style={styles.mapOpenText}>{t('Open in Google Maps ↗')}</Text>
       </Pressable>
@@ -495,79 +527,89 @@ function DetailsModal({ offer, onClose }) {
     <Modal visible={open || !!renderOffer} transparent animationType="none" onRequestClose={onClose}>
       <Animated.View style={[styles.modalBackdrop, { opacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <Animated.View style={[styles.modalCard, { transform: [{ scale }] }]}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.modalScrollContent}
-          >
-            <BgImage
-              source={data.image}
-              resizeMode="cover"
-              placeholderText={data.category}
-              style={styles.modalImage}
-            />
-
-            <View style={styles.modalBody}>
-              <View style={styles.modalHeaderRow}>
-                <View style={styles.avatar}>
-                  {isImageUrl(data.profile_image) ? (
-                    <BgImage
-                      source={data.profile_image}
-                      resizeMode="cover"
-                      style={styles.avatarImage}
-                    />
-                  ) : (
-                    <Text style={styles.avatarPlus}>+</Text>
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalName}>{data.name}</Text>
-                  <Text style={styles.modalSub}>{displayLocation}</Text>
-                </View>
-                <Text style={styles.modalPrice}>₾{data.price}</Text>
-              </View>
-
-              <Text style={styles.modalDesc}>{data.description}</Text>
-
-              <View style={styles.detailGroup}>
-                <View style={[styles.detailRow, styles.detailRowLast]}>
-                  <Text style={styles.detailLabel}>{t('Number')}</Text>
-                  <Text style={styles.detailValue}>{data.phone}</Text>
-                </View>
-              </View>
-
-              <OfferMap offer={data} t={t} />
-
-              <View style={{ height: 16 }} />
-              <Button
-                title={t('Call now')}
-                size="lg"
-                onPress={() => Linking.openURL(`tel:${data.phone}`)}
+        <Animated.View style={[styles.modalCardWrap, { transform: [{ scale }] }]}>
+          <GlassSurface tone="light" radius={32} shadow="lifted" clip style={styles.modalCard}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              <BgImage
+                source={data.image}
+                resizeMode="cover"
+                placeholderText={data.category}
+                style={styles.modalImage}
               />
-              <View style={{ height: 4 }} />
-              <Button title={t('Close')} variant="ghost" size="md" onPress={onClose} />
 
-              {Array.isArray(data.images) && data.images.length > 0 ? (
-                <View style={styles.photoStripWrap}>
-                  <Text style={styles.photoStripLabel}>{t('Photos')}</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.photoStripContent}
-                  >
-                    {data.images.map((src, i) => (
-                      <BgImage
-                        key={i}
-                        source={src}
-                        resizeMode="cover"
-                        style={styles.photoStripTile}
-                      />
-                    ))}
-                  </ScrollView>
-                </View>
-              ) : null}
-            </View>
-          </ScrollView>
+              <View style={styles.modalBody}>
+                <GlassSurface tone="strong" radius={24} shadow="subtle" style={styles.modalHeaderCard}>
+                  <View style={styles.modalHeaderRow}>
+                    <View style={styles.avatar}>
+                      {isImageUrl(data.profile_image) ? (
+                        <BgImage
+                          source={data.profile_image}
+                          resizeMode="cover"
+                          style={styles.avatarImage}
+                        />
+                      ) : (
+                        <Text style={styles.avatarPlus}>
+                          {(data.name || '?').slice(0, 1).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.modalName} numberOfLines={1}>{data.name}</Text>
+                      <Text style={styles.modalSub} numberOfLines={1}>{displayLocation}</Text>
+                    </View>
+                    <Text style={styles.modalPrice}>₾{data.price}</Text>
+                  </View>
+                </GlassSurface>
+
+                <Text style={styles.modalDesc}>{data.description}</Text>
+
+                <GlassSurface tone="soft" radius={20} shadow="none" style={styles.detailGroup}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>{t('Number')}</Text>
+                    <Text style={styles.detailValue}>{data.phone}</Text>
+                  </View>
+                </GlassSurface>
+
+                <OfferMap offer={data} t={t} />
+
+                {Array.isArray(data.images) && data.images.length > 0 ? (
+                  <View style={styles.photoStripWrap}>
+                    <Text style={styles.photoStripLabel}>{t('Photos')}</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.photoStripContent}
+                    >
+                      {data.images.map((src, i) => (
+                        <View key={i} style={styles.photoStripTile}>
+                          <BgImage source={src} resizeMode="cover" style={styles.photoStripImage} />
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                ) : null}
+
+                <View style={{ height: 18 }} />
+                <GlassButton
+                  title={t('Call now')}
+                  size="lg"
+                  onPress={() => Linking.openURL(`tel:${data.phone}`)}
+                  style={{ alignSelf: 'stretch' }}
+                />
+                <View style={{ height: 8 }} />
+                <GlassButton
+                  title={t('Close')}
+                  variant="ghost"
+                  size="md"
+                  onPress={onClose}
+                  style={{ alignSelf: 'stretch' }}
+                />
+              </View>
+            </ScrollView>
+          </GlassSurface>
         </Animated.View>
       </Animated.View>
     </Modal>
@@ -575,162 +617,153 @@ function DetailsModal({ offer, onClose }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-
   headerFloat: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.bg,
     zIndex: 10,
+  },
+  headerBlur: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
+  },
+  headerInner: {
+    paddingBottom: 10,
+  },
+  headerHairline: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 1,
+    backgroundColor: glass.stroke,
   },
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 14,
+    paddingTop: 12,
     paddingHorizontal: 20,
     paddingBottom: 10,
+    height: HEADER_HEIGHT,
   },
-  headerTitle: { ...typography.h1, fontSize: 24 },
-  headerSub: { ...typography.caption, color: colors.textTertiary, marginTop: 4 },
+  headerTitle: { ...typography.h1, fontSize: 26, letterSpacing: -0.5 },
+  headerSub: { ...typography.caption, color: colors.textTertiary, marginTop: 3 },
 
-  list: { paddingHorizontal: 16, paddingBottom: 16 },
-  empty: { alignItems: 'center', paddingTop: 80 },
-  emptyDot: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceAlt,
-    marginBottom: 14,
+  list: { paddingHorizontal: 16 },
+
+  emptyCard: {
+    alignItems: 'center',
+    paddingVertical: 44,
+    paddingHorizontal: 24,
+    marginTop: 40,
   },
-  emptyTitle: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
-  emptySub: { fontSize: 13, color: colors.textTertiary, marginTop: 4 },
-
-  filterBtn: {
-    backgroundColor: colors.text,
-    borderRadius: radius.pill,
-    width: 40,
-    height: 40,
+  emptyOrb: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: glass.accentFill,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.button,
-    shadowColor: '#0F0F1E',
-    shadowOpacity: 0.18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: glass.accentStroke,
   },
-  filterBtnActive: { backgroundColor: colors.accent },
-  filterBtnText: { color: '#fff', fontSize: 22, fontWeight: '300', lineHeight: 24 },
-  filterBtnTextActive: { color: '#fff' },
+  emptyOrbCore: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.accent,
+    opacity: 0.85,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  emptySub: { fontSize: 13, color: colors.textTertiary, marginTop: 6, textAlign: 'center' },
+
+  filterBtn: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
 
   searchWrap: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginHorizontal: 20,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 3,
   },
-  searchIcon: { fontSize: 16, color: colors.textTertiary, marginRight: 8 },
   search: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 11,
+    paddingLeft: 12,
     fontSize: 14,
     color: colors.text,
   },
 
   radiusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 8,
   },
   radiusLabel: {
     fontSize: 11,
     color: colors.textTertiary,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    fontWeight: '700',
-    marginRight: 10,
+    letterSpacing: 1,
+    fontWeight: '800',
   },
   radiusChips: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingRight: 12,
-  },
-  radiusChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    marginRight: 6,
-  },
-  radiusChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
-  },
-  radiusChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  radiusChipTextActive: {
-    color: '#fff',
+    paddingHorizontal: 20,
+    paddingRight: 16,
   },
   radiusHint: {
     fontSize: 11,
     color: colors.textTertiary,
-    paddingHorizontal: 16,
-    paddingBottom: 6,
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
-  radiusError: {
-    color: '#C0392B',
-  },
+  radiusError: { color: colors.danger },
 
-  cardWrap: { marginBottom: 12 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+  cardWrap: { marginBottom: 20 },
+  card: { position: 'relative' },
+  cardImageFrame: {
+    borderRadius: 28,
     overflow: 'hidden',
-    ...shadows.card,
+    borderWidth: 1,
+    borderColor: glass.stroke,
+    backgroundColor: colors.surfaceAlt,
+    shadowColor: '#0F0F1E',
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
   cardImage: {
     width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: colors.surfaceAlt,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
+    aspectRatio: 4 / 3,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
   cardPriceTag: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(10, 10, 10, 0.86)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
+    top: 12,
+    right: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
   },
-  cardPriceTagText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  cardPriceTagText: { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 0.2 },
+
   imageLoadingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   spinDot: {
     width: 8,
@@ -739,157 +772,172 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     marginRight: 8,
   },
-  imageLoadingText: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
+  imageLoadingText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
 
-  cardBody: { padding: 14 },
-  desc: { fontSize: 14, color: colors.text, lineHeight: 20, marginBottom: 12 },
+  cardPanel: {
+    marginTop: -42,
+    marginHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+  },
+  desc: { fontSize: 14.5, color: colors.text, lineHeight: 21, marginBottom: 12, fontWeight: '500' },
   cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  cardName: { fontSize: 13, color: colors.text, fontWeight: '600' },
+  cardName: { fontSize: 13, color: colors.text, fontWeight: '700', flexShrink: 1 },
+  cardLocWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    flexShrink: 1,
+  },
+  locDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: colors.accent,
+    opacity: 0.55,
+    marginRight: 6,
+  },
   cardLoc: {
     fontSize: 12,
     color: colors.textTertiary,
-    marginLeft: 10,
     flexShrink: 1,
   },
 
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.accentSoft,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    borderWidth: 1,
-    borderColor: colors.accentSoftBorder,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: glass.stroke,
   },
-  avatarText: { color: colors.accent, fontWeight: '700', fontSize: 12 },
-  avatarPlus: { color: colors.accent, fontWeight: '300', fontSize: 24, lineHeight: 26 },
+  avatarPlus: { color: '#fff', fontWeight: '700', fontSize: 18 },
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 20,
-    backgroundColor: colors.surfaceAlt,
+    borderRadius: 22,
   },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(10, 10, 18, 0.55)',
+    backgroundColor: glass.scrim,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
+  },
+  modalCardWrap: {
+    width: '100%',
+    maxWidth: 380,
+    maxHeight: '90%',
   },
   modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    maxHeight: '90%',
-    backgroundColor: colors.surface,
-    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.90)',
     overflow: 'hidden',
-    ...shadows.cardHover,
-    shadowOpacity: 0.3,
   },
-  modalScrollContent: {
-    paddingBottom: 0,
-  },
+  modalScrollContent: { paddingBottom: 0 },
   modalImage: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    aspectRatio: 4 / 3,
     backgroundColor: colors.surfaceAlt,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'center',
   },
-  modalBody: { padding: 20 },
+  modalBody: { padding: 18 },
+  modalHeaderCard: {
+    padding: 12,
+    marginTop: -46,
+    marginBottom: 16,
+  },
   modalHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
   },
-  modalName: { fontSize: 17, fontWeight: '700', color: colors.text },
+  modalName: { fontSize: 16, fontWeight: '800', color: colors.text },
   modalSub: { fontSize: 12, color: colors.textTertiary, marginTop: 3 },
-  modalPrice: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
-  modalDesc: { fontSize: 14, color: colors.text, lineHeight: 21, marginBottom: 8 },
-
-  mapWrap: {
-    marginTop: 12,
+  modalPrice: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.accent,
+    letterSpacing: -0.5,
+    marginLeft: 8,
   },
+  modalDesc: { fontSize: 14.5, color: colors.text, lineHeight: 22, marginBottom: 4 },
+
+  mapWrap: { marginTop: 14 },
   mapFrame: {
-    width: '100%',
-    height: 180,
-    borderRadius: radius.md,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: glass.stroke,
     backgroundColor: colors.surfaceAlt,
-    position: 'relative',
   },
   mapOpenBtn: {
     alignSelf: 'flex-end',
-    marginTop: 6,
+    marginTop: 8,
     paddingVertical: 4,
     paddingHorizontal: 6,
   },
   mapOpenText: {
     fontSize: 12,
     color: colors.accent,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   detailGroup: {
-    marginTop: 12,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
+    marginTop: 14,
+    paddingHorizontal: 16,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  detailRowLast: { borderBottomWidth: 0 },
-  photoStripWrap: {
-    marginTop: 20,
-    marginHorizontal: -20,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  photoStripLabel: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    fontWeight: '700',
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  photoStripContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 4,
-    gap: 10,
-  },
-  photoStripTile: {
-    width: 160,
-    height: 160,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginRight: 10,
+    paddingVertical: 13,
   },
   detailLabel: {
     fontSize: 11,
     color: colors.textTertiary,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    fontWeight: '600',
+    letterSpacing: 0.9,
+    fontWeight: '700',
   },
-  detailValue: { fontSize: 14, color: colors.text, fontWeight: '500' },
+  detailValue: { fontSize: 14, color: colors.text, fontWeight: '700' },
+
+  photoStripWrap: {
+    marginTop: 20,
+    marginHorizontal: -18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: glass.strokeSoft,
+  },
+  photoStripLabel: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '800',
+    paddingHorizontal: 18,
+    marginBottom: 10,
+  },
+  photoStripContent: {
+    paddingHorizontal: 18,
+    paddingBottom: 4,
+  },
+  photoStripTile: {
+    width: 150,
+    height: 150,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: glass.stroke,
+    backgroundColor: colors.surfaceAlt,
+    marginRight: 10,
+  },
+  photoStripImage: { width: '100%', height: '100%' },
 });

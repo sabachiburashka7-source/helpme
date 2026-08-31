@@ -1,11 +1,14 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Alert, Modal, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, radius, shadows, typography } from '../components/theme';
+import { colors, glass, radius, typography } from '../components/theme';
 import { useTranslation } from '../components/i18n';
 import { BgImage } from '../components/BgImage';
 import { isImageUrl } from '../components/profileImage';
 import { apiUrl } from '../components/apiBase';
+import {
+  AmbientBackground, GlassSurface, GlassButton, SectionLabel, PressableGlass,
+} from '../components/Glass';
 
 const ACCENT = '#7A1230';
 
@@ -121,144 +124,164 @@ export default function ProfileScreen({
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
-        <View style={styles.topBar}>
-          <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
-            <Text style={styles.closeBtnText}>‹ {t('Back')}</Text>
-          </Pressable>
-          <Text style={styles.topTitle}>{t('Profile')}</Text>
-          <View style={styles.topSpacer} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Identity card */}
-          <View style={styles.identityCard}>
-            <View style={styles.avatarWrap}>
-              {isImageUrl(user.profile_image) ? (
-                <BgImage source={user.profile_image} resizeMode="cover" style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarInitial}>
-                    {(user.name || '?').slice(0, 1).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.identityName} numberOfLines={1}>{user.name}</Text>
-            {user.phone ? <Text style={styles.identityPhone}>{user.phone}</Text> : null}
+      <AmbientBackground>
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+          <View style={styles.topBar}>
+            <PressableGlass onPress={onClose} scaleTo={0.93}>
+              <GlassSurface tone="strong" radius={radius.pill} shadow="subtle" style={styles.backBtn}>
+                <Text style={styles.backChevron}>‹</Text>
+                <Text style={styles.backText}>{t('Back')}</Text>
+              </GlassSurface>
+            </PressableGlass>
+            <Text style={styles.topTitle}>{t('Profile')}</Text>
+            <View style={styles.topSpacer} />
           </View>
 
-          {/* Subscription card — only rendered for Pro users. The Pro upgrade
-              flow is hidden in v1 since Google Play Billing isn't wired yet;
-              Pro accounts only exist via manual Supabase toggling in this
-              phase, and they still need a way to cancel. */}
-          {tier === 'pro' ? (
-            <>
-              <View style={styles.sectionLabelWrap}>
-                <Text style={styles.sectionLabel}>{t('Subscription')}</Text>
-              </View>
-              <View style={styles.card}>
-                <View style={styles.subRow}>
-                  <View style={styles.subLeft}>
-                    <View style={[styles.tierBadge, styles.tierBadgePro]}>
-                      <Text style={[styles.tierBadgeText, styles.tierBadgeTextPro]}>
-                        {t('Pro')}
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            {/* Identity card */}
+            <GlassSurface tone="light" radius={32} shadow="lifted" style={styles.identityCard}>
+              <GlassSurface tone="strong" radius={radius.pill} shadow="base" style={styles.avatarRing}>
+                <View style={styles.avatarWrap}>
+                  {isImageUrl(user.profile_image) ? (
+                    <BgImage source={user.profile_image} resizeMode="cover" style={styles.avatar} />
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                      <Text style={styles.avatarInitial}>
+                        {(user.name || '?').slice(0, 1).toUpperCase()}
                       </Text>
+                    </View>
+                  )}
+                </View>
+              </GlassSurface>
+              <Text style={styles.identityName} numberOfLines={1}>{user.name}</Text>
+              {user.phone ? <Text style={styles.identityPhone}>{user.phone}</Text> : null}
+            </GlassSurface>
+
+            {/* Subscription card — only rendered for Pro users. The Pro upgrade
+                flow is hidden in v1 since Google Play Billing isn't wired yet;
+                Pro accounts only exist via manual toggling in this phase, and
+                they still need a way to cancel. */}
+            {tier === 'pro' ? (
+              <>
+                <View style={styles.sectionLabelWrap}>
+                  <SectionLabel>{t('Subscription')}</SectionLabel>
+                </View>
+                <GlassSurface tone="light" radius={26} shadow="base" style={styles.card}>
+                  <View style={styles.subRow}>
+                    <View style={styles.tierBadgePro}>
+                      <Text style={styles.tierBadgeTextPro}>{t('Pro')}</Text>
                     </View>
                     <Text style={styles.subPlanName}>{t('15 posts per month')}</Text>
                   </View>
-                </View>
 
-                {expiry ? (
-                  <Text style={styles.subMeta}>
-                    {t('Renews on {date}').replace('{date}', expiry)}
-                  </Text>
-                ) : null}
+                  {expiry ? (
+                    <Text style={styles.subMeta}>
+                      {t('Renews on {date}').replace('{date}', expiry)}
+                    </Text>
+                  ) : null}
 
-                <Pressable onPress={handleCancelSubscription} style={styles.subActionGhost}>
-                  <Text style={styles.subActionGhostText}>{t('Cancel subscription')}</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : null}
+                  <GlassButton
+                    title={t('Cancel subscription')}
+                    variant="glass"
+                    size="sm"
+                    onPress={handleCancelSubscription}
+                    style={styles.subAction}
+                    textStyle={{ color: colors.textSecondary }}
+                  />
+                </GlassSurface>
+              </>
+            ) : null}
 
-          {/* Account actions */}
-          <View style={styles.sectionLabelWrap}>
-            <Text style={styles.sectionLabel}>{t('Account')}</Text>
-          </View>
-          <View style={styles.card}>
-            <Pressable onPress={handleLogout} style={styles.row}>
-              <Text style={styles.rowText}>{t('Sign out')}</Text>
-              <Text style={styles.rowChevron}>›</Text>
-            </Pressable>
-            <View style={styles.rowDivider} />
-            <Pressable onPress={handleDelete} style={styles.row}>
-              <Text style={[styles.rowText, styles.rowTextDanger]}>{t('Delete account')}</Text>
-              <Text style={[styles.rowChevron, styles.rowTextDanger]}>›</Text>
-            </Pressable>
-          </View>
+            {/* Account actions */}
+            <View style={styles.sectionLabelWrap}>
+              <SectionLabel>{t('Account')}</SectionLabel>
+            </View>
+            <GlassSurface tone="light" radius={26} shadow="base" style={styles.card}>
+              <Pressable onPress={handleLogout} style={styles.row}>
+                <Text style={styles.rowText}>{t('Sign out')}</Text>
+                <Text style={styles.rowChevron}>›</Text>
+              </Pressable>
+              <View style={styles.rowDivider} />
+              <Pressable onPress={handleDelete} style={styles.row}>
+                <Text style={[styles.rowText, styles.rowTextDanger]}>{t('Delete account')}</Text>
+                <Text style={[styles.rowChevron, styles.rowTextDanger]}>›</Text>
+              </Pressable>
+            </GlassSurface>
 
-          {/* Legal — Google Play requires the privacy policy to be reachable
-              from inside the app, not only from the Play Store listing. */}
-          <View style={styles.sectionLabelWrap}>
-            <Text style={styles.sectionLabel}>{t('Legal')}</Text>
-          </View>
-          <View style={styles.card}>
-            <Pressable onPress={openPrivacy} style={styles.row}>
-              <Text style={styles.rowText}>{t('Privacy Policy')}</Text>
-              <Text style={styles.rowChevron}>›</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+            {/* Legal — Google Play requires the privacy policy to be reachable
+                from inside the app, not only from the Play Store listing. */}
+            <View style={styles.sectionLabelWrap}>
+              <SectionLabel>{t('Legal')}</SectionLabel>
+            </View>
+            <GlassSurface tone="light" radius={26} shadow="base" style={styles.card}>
+              <Pressable onPress={openPrivacy} style={styles.row}>
+                <Text style={styles.rowText}>{t('Privacy Policy')}</Text>
+                <Text style={styles.rowChevron}>›</Text>
+              </Pressable>
+            </GlassSurface>
+          </ScrollView>
+        </SafeAreaView>
+      </AmbientBackground>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
-  closeBtn: { paddingVertical: 6, paddingRight: 8 },
-  closeBtnText: {
-    fontSize: 15,
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 12,
+    paddingRight: 16,
+    paddingVertical: 9,
+  },
+  backChevron: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: ACCENT,
+    marginRight: 5,
+    lineHeight: 21,
+  },
+  backText: {
+    fontSize: 14,
     fontWeight: '700',
     color: ACCENT,
     letterSpacing: 0.2,
   },
   topTitle: {
     ...typography.h2,
-    fontSize: 18,
+    fontSize: 17,
+    letterSpacing: -0.2,
   },
-  topSpacer: { width: 64 },
+  topSpacer: { width: 92 },
 
-  scroll: { paddingHorizontal: 16, paddingBottom: 32 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 36, paddingTop: 6 },
 
   identityCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingVertical: 24,
+    paddingVertical: 26,
     paddingHorizontal: 18,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+  },
+  avatarRing: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   avatarWrap: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     overflow: 'hidden',
-    marginBottom: 12,
-    borderWidth: 3,
-    borderColor: '#fff',
     backgroundColor: colors.surfaceAlt,
-    ...shadows.card,
   },
   avatar: { width: '100%', height: '100%' },
   avatarPlaceholder: {
@@ -268,77 +291,50 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     color: '#fff',
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: '800',
   },
   identityName: {
     ...typography.h2,
-    fontSize: 20,
+    fontSize: 21,
+    fontWeight: '800',
     textAlign: 'center',
+    letterSpacing: -0.4,
   },
   identityPhone: {
-    marginTop: 4,
+    marginTop: 5,
     fontSize: 13,
     color: colors.textSecondary,
     fontWeight: '600',
   },
 
   sectionLabelWrap: {
-    marginTop: 22,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: colors.textTertiary,
-    textTransform: 'uppercase',
+    marginTop: 24,
+    marginBottom: 10,
+    paddingHorizontal: 8,
   },
 
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    ...shadows.card,
-  },
+  card: { overflow: 'hidden' },
 
   subRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  subLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
-    flexShrink: 1,
-  },
-  tierBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  tierBadgeFree: {
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 18,
+    paddingTop: 18,
   },
   tierBadgePro: {
-    borderColor: ACCENT,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
     backgroundColor: ACCENT,
   },
-  tierBadgeText: {
+  tierBadgeTextPro: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.6,
+    color: '#fff',
   },
-  tierBadgeTextFree: { color: colors.textSecondary },
-  tierBadgeTextPro: { color: '#fff' },
   subPlanName: {
     fontSize: 14,
     color: colors.text,
@@ -348,61 +344,31 @@ const styles = StyleSheet.create({
   subMeta: {
     fontSize: 12,
     color: colors.textSecondary,
-    paddingHorizontal: 16,
-    marginTop: 8,
+    paddingHorizontal: 18,
+    marginTop: 10,
   },
-
-  subActionPrimary: {
-    margin: 14,
-    backgroundColor: ACCENT,
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subActionPrimaryText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  subActionGhost: {
-    margin: 14,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  subActionGhostText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
+  subAction: { margin: 16, alignSelf: 'stretch' },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 17,
   },
   rowDivider: {
     height: 1,
-    backgroundColor: colors.border,
-    marginLeft: 16,
+    backgroundColor: glass.strokeSoft,
+    marginLeft: 18,
   },
   rowText: {
     fontSize: 15,
     color: colors.text,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   rowTextDanger: { color: '#B53D5E' },
   rowChevron: {
-    fontSize: 18,
+    fontSize: 19,
     color: colors.textTertiary,
     fontWeight: '700',
   },

@@ -110,6 +110,43 @@ If a clone reappears, also run:
 | `components/profileImage.js` | `pickProfileImage` / `pickOfferImages` via `expo-image-picker`, returning data URLs. |
 | `components/MapPicker.js` | MapLibre map inside `react-native-webview`. Used for both picking (draggable) and detail view (`draggable={false}`). No Google Maps API key needed — tiles from openfreemap. |
 | `components/BgImage.js` | `<View>` with a background image. Wraps `<Image>` absolutely under children. Use this anywhere you'd reach for CSS `backgroundImage`. |
+| `components/Glass.js` | Glassmorphism primitives (`AmbientBackground`, `GlassSurface`, `BlurSurface`, `GlassButton`, `GlassField`, `GlassSegmented`, `GlassChip`). See the design system section below. |
+
+## Design system — glassmorphism (`components/Glass.js`)
+
+The whole UI is frosted glass floating over an ambient background. The
+**palette is unchanged** — `colors` in `components/theme.js` holds the same
+values it always did. `theme.js` now also exports a `glass` token set,
+which is just those same colors at low alpha.
+
+| Piece | Use it for |
+|---|---|
+| `AmbientBackground` | Root of every screen. White -> `bg` -> `accentSoft` gradient plus soft accent orbs. Without it, glass has nothing to show through and just looks grey. |
+| `GlassSurface` | The default panel: translucent fill + bright rim + diagonal sheen. **No native blur**, so it is safe inside scrolling lists. Cards, fields, chips, modal sheets. |
+| `BlurSurface` | Real `expo-blur` frosted glass. **Fixed chrome only** — the tab bar and the Browse header. |
+| `GlassButton` / `GlassIconButton` | Buttons. `primary` = solid accent with a light sheen; also `glass`, `ghost`, `danger`. |
+| `GlassField` | Labelled text input with a focus ring. |
+| `GlassSegmented` | Pill tab switcher with a sliding glass thumb. |
+| `GlassChip` | Small pill — radius filters, "Profile", "Re-detect". |
+
+### Rules
+
+- **Never put a `BlurView` inside a `ScrollView` or a `Modal`.** Android
+  blur is the experimental `dimezisBlurView` path: expensive while
+  scrolling and it misrenders inside modals. `GlassSurface` is the
+  no-blur fallback and looks nearly identical over the ambient background.
+- **Don't reintroduce solid `backgroundColor: colors.surface` panels.**
+  If a new panel needs a background, use `GlassSurface`.
+- **The bottom tab bar is `position: 'absolute'` and fully transparent**
+  so content scrolls under the blur. Every screen inside the navigator
+  must pad its scroll content with `useBottomTabBarHeight()` from
+  `@react-navigation/bottom-tabs`, or content hides behind the bar. It
+  still has **no fixed `height`** — bottom-tabs adds the gesture inset.
+- **Keep the palette.** Glass means the same colors at lower alpha, never
+  new hues.
+- Native deps this relies on: `expo-blur`, `expo-linear-gradient`. Both
+  are autolinked; a JS-only change needs no prebuild, but the APK must be
+  rebuilt after they were added.
 
 ## Critical native pitfalls
 

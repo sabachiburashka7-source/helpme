@@ -7,7 +7,8 @@ import { StatusBar } from 'expo-status-bar';
 import BrowseScreen from './screens/BrowseScreen';
 import MyRequestsScreen from './screens/MyRequestsScreen';
 import AuthScreen from './screens/AuthScreen';
-import { colors, radius } from './components/theme';
+import { colors, glass, radius } from './components/theme';
+import { BlurSurface } from './components/Glass';
 import { I18nProvider, useTranslation } from './components/i18n';
 import * as Storage from './components/storage';
 import { apiUrl } from './components/apiBase';
@@ -251,15 +252,28 @@ function AppInner() {
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerShown: false,
+          // Frosted floating bar. The tab bar is absolutely positioned and
+          // fully transparent so screen content scrolls *under* the blur —
+          // screens pad their scroll content with `useBottomTabBarHeight()`.
+          // No fixed height: bottom-tabs still adds the gesture-bar inset.
           tabBarStyle: {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
-            borderTopWidth: 1,
-            paddingTop: 6,
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+            paddingTop: 8,
             paddingHorizontal: 8,
             elevation: 0,
             shadowOpacity: 0,
           },
+          tabBarBackground: () => (
+            <View style={StyleSheet.absoluteFill}>
+              <BlurSurface tone="soft" intensity={46} style={styles.tabBarGlass} />
+              <View pointerEvents="none" style={styles.tabBarHairline} />
+            </View>
+          ),
           tabBarItemStyle: {
             paddingHorizontal: 4,
             paddingVertical: 0,
@@ -408,18 +422,34 @@ function RequestsIcon({ color }) {
 }
 
 const styles = StyleSheet.create({
+  tabBarGlass: {
+    flex: 1,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  tabBarHairline: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: glass.stroke,
+  },
   iconWrap: {
-    width: 36,
-    height: 22,
+    width: 44,
+    height: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconPillBg: {
     position: 'absolute',
-    width: 36,
-    height: 22,
+    width: 44,
+    height: 26,
     borderRadius: radius.pill,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: glass.accentFillMd,
+    borderWidth: 1,
+    borderColor: glass.accentStroke,
   },
   iconBox: {
     width: 16,
@@ -430,12 +460,12 @@ const styles = StyleSheet.create({
   iconBar: { borderRadius: 1.5 },
   tabLabel: {
     fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-    marginTop: 1,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginTop: 3,
     textAlign: 'center',
   },
   tabLabelActive: {
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });

@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TextInput, Pressable, Animated, Easing,
   StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { colors, radius, shadows, typography } from '../components/theme';
+import { colors, glass, radius } from '../components/theme';
 import FadeInUp from '../components/FadeInUp';
 import MapPicker from '../components/MapPicker';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
@@ -13,11 +13,15 @@ import { apiUrl } from '../components/apiBase';
 import { getCurrentLocation } from '../components/location';
 import { BgImage } from '../components/BgImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import ProfileScreen from './ProfileScreen';
+import {
+  AmbientBackground, GlassSurface, GlassField, GlassButton, GlassSegmented,
+  GlassChip, PressableGlass,
+} from '../components/Glass';
 
 const MAX_OFFER_IMAGES = 6;
 const ACCENT = '#7A1230';
-const liveDark = { backgroundColor: ACCENT };
 
 function confirmDialog(title, message) {
   return new Promise((resolve) => {
@@ -28,142 +32,27 @@ function confirmDialog(title, message) {
   });
 }
 
-function Field({ label, multiline, ...inputProps }) {
-  const [isFocused, setFocused] = useState(false);
-  return (
-    <View style={fieldStyles.wrap}>
-      <Text style={fieldStyles.label}>{label}</Text>
-      <View
-        style={[
-          fieldStyles.inputWrap,
-          multiline && fieldStyles.textAreaWrap,
-          isFocused && fieldStyles.inputWrapFocused,
-        ]}
-      >
-        <TextInput
-          {...inputProps}
-          multiline={multiline}
-          onFocus={(e) => {
-            setFocused(true);
-            inputProps.onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            setFocused(false);
-            inputProps.onBlur?.(e);
-          }}
-          placeholderTextColor={colors.textMuted}
-          style={[fieldStyles.input, multiline && fieldStyles.textArea]}
-        />
-      </View>
-    </View>
-  );
-}
-
-function PillTabs({ tabs, value, onChange }) {
-  const [innerW, setInnerW] = useState(0);
-  const tx = useRef(new Animated.Value(0)).current;
-  const index = Math.max(0, tabs.findIndex((t) => t.value === value));
-  const segmentW = innerW > 0 ? (innerW - 8) / tabs.length : 0; // 4 padding each side
-
-  useEffect(() => {
-    if (segmentW === 0) return;
-    Animated.spring(tx, {
-      toValue: segmentW * index,
-      useNativeDriver: true,
-      speed: 22,
-      bounciness: 8,
-    }).start();
-  }, [index, segmentW, tx]);
-
-  return (
-    <View style={tabStyles.outer}>
-      <View
-        style={tabStyles.inner}
-        onLayout={(e) => setInnerW(e.nativeEvent.layout.width)}
-      >
-        {segmentW > 0 ? (
-          <Animated.View
-            style={[
-              tabStyles.thumb,
-              {
-                width: segmentW,
-                transform: [{ translateX: tx }],
-              },
-            ]}
-          />
-        ) : null}
-        <View style={tabStyles.row}>
-          {tabs.map((t) => {
-            const active = t.value === value;
-            return (
-              <Pressable
-                key={t.value}
-                onPress={() => onChange(t.value)}
-                style={tabStyles.tab}
-              >
-                <Text style={[tabStyles.text, active && tabStyles.textActive]}>
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function SoftButton({ title, onPress }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const animate = (to) =>
-    Animated.spring(scale, {
-      toValue: to,
-      useNativeDriver: true,
-      speed: 40,
-      bounciness: 6,
-    }).start();
-
-  return (
-    <Animated.View style={{ transform: [{ scale }], alignSelf: 'stretch' }}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={() => animate(0.97)}
-        onPressOut={() => animate(1)}
-        style={btnStyles.base}
-      >
-        <Text style={btnStyles.text}>{title}</Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-function OutlinePill({ title, onPress }) {
-  return (
-    <Pressable onPress={onPress} style={pillStyles.base}>
-      <Text style={pillStyles.text}>{title}</Text>
-    </Pressable>
-  );
-}
-
 function LoadingState() {
   const { t } = useTranslation();
-  const pulse = useRef(new Animated.Value(0.4)).current;
+  const pulse = useRef(new Animated.Value(0.45)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.4, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
   }, [pulse]);
   return (
-    <View style={styles.empty}>
-      <Animated.View style={[styles.emptyDot, liveDark, { opacity: pulse }]} />
+    <GlassSurface tone="light" radius={30} shadow="base" style={styles.emptyCard}>
+      <Animated.View style={[styles.emptyOrb, { opacity: pulse }]}>
+        <View style={styles.emptyOrbCore} />
+      </Animated.View>
       <Text style={styles.emptyTitle}>{t('Loading requests…')}</Text>
       <Text style={styles.emptySub}>{t('Hang tight')}</Text>
-    </View>
+    </GlassSurface>
   );
 }
 
@@ -185,6 +74,7 @@ function postsThisMonthCount(offers) {
 
 export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onCancelSubscription, onUpgrade, onUpdateProfileImage }) {
   const { t, lang } = useTranslation();
+  const tabBarHeight = useBottomTabBarHeight();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const tier = user?.tier === 'pro' ? 'pro' : 'free';
@@ -337,248 +227,250 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      edges={['top', 'left', 'right']}
-    >
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: colors.bg }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.container}>
-          {/* Hero — soft-tinted rounded profile card */}
-          <FadeInUp>
-            <View style={styles.heroOuter}>
-              <View style={styles.hero}>
-                <View style={styles.heroTopRow}>
-                  <LanguageSwitcher />
-                  <OutlinePill title={t('Profile')} onPress={() => setProfileOpen(true)} />
-                </View>
-
-                <Pressable
-                  onPress={handlePickProfileImage}
-                  style={[
-                    styles.avatarRing,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.avatar,
-                      !isImageUrl(profile.profileImage) && liveDark,
-                    ]}
-                  >
-                    {isImageUrl(profile.profileImage) ? (
-                      <BgImage
-                        source={profile.profileImage}
-                        resizeMode="cover"
-                        style={styles.avatarImage}
-                      />
-                    ) : (
-                      <Text style={styles.avatarPlus}>+</Text>
-                    )}
+    <AmbientBackground>
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.container}>
+            <FadeInUp>
+              <View style={styles.heroOuter}>
+                <GlassSurface tone="light" radius={32} shadow="lifted" style={styles.hero}>
+                  <View style={styles.heroTopRow}>
+                    <LanguageSwitcher />
+                    <GlassChip label={t('Profile')} onPress={() => setProfileOpen(true)} />
                   </View>
-                </Pressable>
 
-                <Text style={styles.profileName} numberOfLines={1}>{profile.name}</Text>
-                {profile.phone ? (
-                  <Text style={styles.profileSub} numberOfLines={1}>{profile.phone}</Text>
-                ) : null}
+                  <Pressable onPress={handlePickProfileImage}>
+                    <GlassSurface
+                      tone="strong"
+                      radius={radius.pill}
+                      shadow="base"
+                      style={styles.avatarRing}
+                    >
+                      <View style={styles.avatar}>
+                        {isImageUrl(profile.profileImage) ? (
+                          <BgImage
+                            source={profile.profileImage}
+                            resizeMode="cover"
+                            style={styles.avatarImage}
+                          />
+                        ) : (
+                          <View style={styles.avatarEmpty}>
+                            <Text style={styles.avatarPlus}>+</Text>
+                          </View>
+                        )}
+                      </View>
+                    </GlassSurface>
+                  </Pressable>
 
-                <View style={styles.quotaRow}>
-                  {tier === 'pro' ? (
-                    <View style={[styles.tierBadge, styles.tierBadgePro]}>
-                      <Text style={[styles.tierBadgeText, styles.tierBadgeTextPro]}>{t('Pro')}</Text>
-                    </View>
+                  <Text style={styles.profileName} numberOfLines={1}>{profile.name}</Text>
+                  {profile.phone ? (
+                    <Text style={styles.profileSub} numberOfLines={1}>{profile.phone}</Text>
                   ) : null}
-                  <Text style={styles.quotaText}>
-                    {t('{used}/{limit} posts this month').replace('{used}', String(Math.min(quotaUsed, quotaLimit))).replace('{limit}', String(quotaLimit))}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </FadeInUp>
 
-          {/* Pill tabs */}
-          <PillTabs
-            tabs={[
-              { value: 'new', label: t('New request') },
-              { value: 'mine', label: t('Mine') },
-            ]}
-            value={tab}
-            onChange={setTab}
-          />
-
-          {tab === 'new' ? (
-            <ScrollView
-              contentContainerStyle={styles.form}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <FadeInUp>
-                <Field
-                  label={t('Description')}
-                  placeholder={t('What do you need help with?')}
-                  multiline
-                  value={form.description}
-                  onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
-                />
-              </FadeInUp>
-
-              <FadeInUp delay={50}>
-                <Field
-                  label={t('Price (GEL)')}
-                  placeholder="50"
-                  keyboardType="numeric"
-                  value={form.price}
-                  onChangeText={(v) => setForm((f) => ({ ...f, price: v }))}
-                />
-              </FadeInUp>
-
-              <FadeInUp delay={100}>
-                <View style={fieldStyles.wrap}>
-                  <Text style={fieldStyles.label}>{t('Location')}</Text>
-                  <View style={locStyles.modeRow}>
-                    <Pressable
-                      onPress={() => switchMode('gps')}
-                      style={[locStyles.modeBtn, locationMode === 'gps' && locStyles.modeBtnActive]}
+                  <View style={styles.quotaRow}>
+                    {tier === 'pro' ? (
+                      <View style={styles.tierBadgePro}>
+                        <Text style={styles.tierBadgeTextPro}>{t('Pro')}</Text>
+                      </View>
+                    ) : null}
+                    <GlassSurface
+                      tone="soft"
+                      radius={radius.pill}
+                      shadow="none"
+                      sheen={false}
+                      style={styles.quotaPill}
                     >
-                      <Text style={[locStyles.modeBtnText, locationMode === 'gps' && locStyles.modeBtnTextActive]}>
-                        {t('Use my location')}
+                      <Text style={styles.quotaText}>
+                        {t('{used}/{limit} posts this month')
+                          .replace('{used}', String(Math.min(quotaUsed, quotaLimit)))
+                          .replace('{limit}', String(quotaLimit))}
                       </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => switchMode('manual')}
-                      style={[locStyles.modeBtn, locationMode === 'manual' && locStyles.modeBtnActive]}
-                    >
-                      <Text style={[locStyles.modeBtnText, locationMode === 'manual' && locStyles.modeBtnTextActive]}>
-                        {t('Type address')}
-                      </Text>
-                    </Pressable>
+                    </GlassSurface>
                   </View>
+                </GlassSurface>
+              </View>
+            </FadeInUp>
 
-                  {locationMode === 'gps' ? (
-                    <View style={locStyles.gpsBox}>
-                      {gpsStatus === 'success' && form.latitude != null ? (
-                        <>
-                          <Text style={locStyles.gpsTitle}>{t('Location pinned')}</Text>
-                          <Text style={locStyles.gpsHelp}>
-                            {t('Drag the pin on the map to adjust')}
-                          </Text>
-                          <View style={locStyles.mapWrap}>
-                            <MapPicker
-                              latitude={form.latitude}
-                              longitude={form.longitude}
-                              onChange={(lat, lng) => applyPin(lat, lng)}
-                              height={220}
+            <View style={styles.tabsWrap}>
+              <GlassSegmented
+                tabs={[
+                  { value: 'new', label: t('New request') },
+                  { value: 'mine', label: t('Mine') },
+                ]}
+                value={tab}
+                onChange={setTab}
+              />
+            </View>
+
+            {tab === 'new' ? (
+              <ScrollView
+                contentContainerStyle={[styles.form, { paddingBottom: tabBarHeight + 40 }]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <FadeInUp>
+                  <GlassField
+                    label={t('Description')}
+                    placeholder={t('What do you need help with?')}
+                    multiline
+                    value={form.description}
+                    onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
+                  />
+                </FadeInUp>
+
+                <FadeInUp delay={50}>
+                  <GlassField
+                    label={t('Price (GEL)')}
+                    placeholder="50"
+                    keyboardType="numeric"
+                    value={form.price}
+                    onChangeText={(v) => setForm((f) => ({ ...f, price: v }))}
+                    left={<Text style={styles.currencyMark}>₾</Text>}
+                    inputStyle={{ paddingLeft: 8 }}
+                  />
+                </FadeInUp>
+
+                <FadeInUp delay={100}>
+                  <View style={styles.fieldBlock}>
+                    <Text style={styles.fieldLabel}>{t('Location')}</Text>
+                    <GlassSegmented
+                      tabs={[
+                        { value: 'gps', label: t('Use my location') },
+                        { value: 'manual', label: t('Type address') },
+                      ]}
+                      value={locationMode}
+                      onChange={switchMode}
+                      style={{ marginBottom: 12 }}
+                    />
+
+                    {locationMode === 'gps' ? (
+                      <GlassSurface tone="light" radius={28} shadow="base" style={styles.gpsBox}>
+                        {gpsStatus === 'success' && form.latitude != null ? (
+                          <>
+                            <Text style={styles.gpsTitle}>{t('Location pinned')}</Text>
+                            <Text style={styles.gpsHelp}>{t('Drag the pin on the map to adjust')}</Text>
+                            <View style={styles.mapWrap}>
+                              <MapPicker
+                                latitude={form.latitude}
+                                longitude={form.longitude}
+                                onChange={(lat, lng) => applyPin(lat, lng)}
+                                height={220}
+                              />
+                            </View>
+                            <View style={styles.gpsFooter}>
+                              <Text style={styles.gpsCoords} numberOfLines={1}>{form.location}</Text>
+                              <GlassChip label={t('Re-detect')} onPress={detectLocation} />
+                            </View>
+                          </>
+                        ) : gpsStatus === 'loading' ? (
+                          <Text style={styles.gpsHint}>{t('Detecting your location…')}</Text>
+                        ) : (
+                          <View style={styles.gpsCenter}>
+                            <Text style={styles.gpsHint}>
+                              {gpsStatus === 'error'
+                                ? gpsError || t('Could not get location')
+                                : t('Tap detect to pin your current location on the map')}
+                            </Text>
+                            <GlassButton
+                              title={t('Detect my location')}
+                              onPress={detectLocation}
+                              size="sm"
                             />
                           </View>
-                          <View style={locStyles.gpsFooter}>
-                            <Text style={locStyles.gpsCoords} numberOfLines={1}>
-                              {form.location}
-                            </Text>
-                            <Pressable onPress={detectLocation} style={locStyles.gpsRefresh}>
-                              <Text style={locStyles.gpsRefreshText}>{t('Re-detect')}</Text>
+                        )}
+                      </GlassSurface>
+                    ) : (
+                      <GlassSurface tone="strong" radius={radius.lg} shadow="subtle" style={styles.plainInputWrap}>
+                        <TextInput
+                          placeholder={t('City, State or full address')}
+                          placeholderTextColor={colors.textMuted}
+                          value={form.location}
+                          onChangeText={(v) => setForm((f) => ({ ...f, location: v, latitude: null, longitude: null }))}
+                          style={styles.plainInput}
+                        />
+                      </GlassSurface>
+                    )}
+                  </View>
+                </FadeInUp>
+
+                <FadeInUp delay={140}>
+                  <View style={styles.fieldBlock}>
+                    <Text style={styles.fieldLabel}>{t('Photos (optional)')}</Text>
+                    {(form.images || []).length > 0 ? (
+                      <View style={styles.thumbRow}>
+                        {(form.images || []).map((src, i) => (
+                          <View key={i} style={styles.thumbWrap}>
+                            <View style={styles.thumb}>
+                              <BgImage source={src} resizeMode="cover" style={styles.thumbImage} />
+                            </View>
+                            <Pressable
+                              onPress={() => removeOfferImage(i)}
+                              style={styles.removeBtn}
+                              accessibilityLabel={t('Remove photo')}
+                            >
+                              <Text style={styles.removeBtnText}>✕</Text>
                             </Pressable>
                           </View>
-                        </>
-                      ) : gpsStatus === 'loading' ? (
-                        <Text style={locStyles.gpsHint}>{t('Detecting your location…')}</Text>
-                      ) : (
-                        <View style={locStyles.gpsCenter}>
-                          <Text style={locStyles.gpsHint}>
-                            {gpsStatus === 'error'
-                              ? gpsError || t('Could not get location')
-                              : t('Tap detect to pin your current location on the map')}
-                          </Text>
-                          <Pressable onPress={detectLocation} style={[locStyles.gpsBtn, liveDark]}>
-                            <Text style={locStyles.gpsBtnText}>{t('Detect my location')}</Text>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    <View style={fieldStyles.inputWrap}>
-                      <TextInput
-                        placeholder={t('City, State or full address')}
-                        placeholderTextColor={colors.textMuted}
-                        value={form.location}
-                        onChangeText={(v) => setForm((f) => ({ ...f, location: v, latitude: null, longitude: null }))}
-                        style={fieldStyles.input}
-                      />
-                    </View>
-                  )}
-                </View>
-              </FadeInUp>
-
-              <FadeInUp delay={140}>
-                <View style={fieldStyles.wrap}>
-                  <Text style={fieldStyles.label}>{t('Photos (optional)')}</Text>
-                  {(form.images || []).length > 0 ? (
-                    <View style={photoStyles.thumbRow}>
-                      {(form.images || []).map((src, i) => (
-                        <View key={i} style={photoStyles.thumbWrap}>
-                          <BgImage
-                            source={src}
-                            resizeMode="cover"
-                            style={photoStyles.thumb}
-                          />
-                          <Pressable
-                            onPress={() => removeOfferImage(i)}
-                            style={photoStyles.removeBtn}
-                            accessibilityLabel={t('Remove photo')}
-                          >
-                            <Text style={photoStyles.removeBtnText}>✕</Text>
-                          </Pressable>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                  {(form.images || []).length < MAX_OFFER_IMAGES ? (
-                    <Pressable onPress={handlePickOfferImages} style={photoStyles.addBtn}>
-                      <View style={photoStyles.addBtnIcon}>
-                        <Text style={photoStyles.addBtnPlus}>+</Text>
+                        ))}
                       </View>
-                      <Text style={photoStyles.addBtnText}>{t('Add photos')}</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </FadeInUp>
+                    ) : null}
+                    {(form.images || []).length < MAX_OFFER_IMAGES ? (
+                      <PressableGlass onPress={handlePickOfferImages} scaleTo={0.98}>
+                        <GlassSurface tone="soft" radius={24} shadow="none" style={styles.addBtn}>
+                          <View style={styles.addBtnIcon}>
+                            <Text style={styles.addBtnPlus}>+</Text>
+                          </View>
+                          <Text style={styles.addBtnText}>{t('Add photos')}</Text>
+                        </GlassSurface>
+                      </PressableGlass>
+                    ) : null}
+                  </View>
+                </FadeInUp>
 
-              <View style={{ height: 28 }} />
-              <FadeInUp delay={170}>
-                <SoftButton title={t('Post request')} onPress={handleSubmit} />
-              </FadeInUp>
-              <View style={{ height: 36 }} />
-            </ScrollView>
-          ) : (
-            <ScrollView
-              contentContainerStyle={styles.myList}
-              showsVerticalScrollIndicator={false}
-            >
-              {myOffers.length === 0 ? (
-                loading ? (
-                  <LoadingState />
+                <View style={{ height: 30 }} />
+                <FadeInUp delay={170}>
+                  <GlassButton
+                    title={t('Post request')}
+                    onPress={handleSubmit}
+                    size="lg"
+                    style={{ alignSelf: 'stretch' }}
+                  />
+                </FadeInUp>
+              </ScrollView>
+            ) : (
+              <ScrollView
+                contentContainerStyle={[styles.myList, { paddingBottom: tabBarHeight + 30 }]}
+                showsVerticalScrollIndicator={false}
+              >
+                {myOffers.length === 0 ? (
+                  loading ? (
+                    <LoadingState />
+                  ) : (
+                    <FadeInUp>
+                      <GlassSurface tone="light" radius={30} shadow="base" style={styles.emptyCard}>
+                        <View style={styles.emptyOrb}>
+                          <View style={styles.emptyOrbCore} />
+                        </View>
+                        <Text style={styles.emptyTitle}>{t('No requests yet')}</Text>
+                        <Text style={styles.emptySub}>{t('Tap "New request" to post your first one')}</Text>
+                      </GlassSurface>
+                    </FadeInUp>
+                  )
                 ) : (
-                  <FadeInUp>
-                    <View style={styles.empty}>
-                      <View style={[styles.emptyDot, liveDark]} />
-                      <Text style={styles.emptyTitle}>{t('No requests yet')}</Text>
-                      <Text style={styles.emptySub}>{t('Tap "New request" to post your first one')}</Text>
-                    </View>
-                  </FadeInUp>
-                )
-              ) : (
-                myOffers.map((offer, i) => (
-                  <FadeInUp key={offer.id} delay={Math.min(i * 40, 240)}>
-                    <MyOfferCard offer={offer} onRemove={onRemoveOffer} />
-                  </FadeInUp>
-                ))
-              )}
-              <View style={{ height: 28 }} />
-            </ScrollView>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+                  myOffers.map((offer, i) => (
+                    <FadeInUp key={offer.id} delay={Math.min(i * 40, 240)}>
+                      <MyOfferCard offer={offer} onRemove={onRemoveOffer} />
+                    </FadeInUp>
+                  ))
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
 
       <ProfileScreen
         visible={profileOpen}
@@ -589,7 +481,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
         onCancelSubscription={onCancelSubscription}
         onUpgrade={onUpgrade}
       />
-    </SafeAreaView>
+    </AmbientBackground>
   );
 }
 
@@ -602,25 +494,38 @@ function MyOfferCard({ offer, onRemove }) {
     onRemove?.(offer.id);
   }
 
+  const hasVisual = !!offer.image || !!offer.generatingImage;
+
   return (
-    <View style={styles.myCard}>
-      {offer.image ? (
-        <BgImage source={offer.image} resizeMode="cover" style={styles.myCardImage} />
-      ) : offer.generatingImage ? (
-        <View style={styles.myCardImagePlaceholder}>
-          <View style={[styles.spinDot, liveDark]} />
-          <Text style={styles.myCardImagePlaceholderText}>{t('Generating image…')}</Text>
+    <View style={styles.myCardWrap}>
+      {hasVisual ? (
+        <View style={styles.myCardImageFrame}>
+          {offer.image ? (
+            <BgImage source={offer.image} resizeMode="cover" style={styles.myCardImage} />
+          ) : (
+            <View style={styles.myCardImagePlaceholder}>
+              <View style={styles.spinDot} />
+              <Text style={styles.myCardImagePlaceholderText}>{t('Generating image…')}</Text>
+            </View>
+          )}
         </View>
       ) : null}
 
-      <View style={styles.myCardBody}>
+      <GlassSurface
+        tone="strong"
+        radius={28}
+        shadow="base"
+        style={[styles.myCardPanel, hasVisual && styles.myCardPanelOverlap]}
+      >
         <View style={styles.myCardTop}>
-          <View style={styles.priceChip}>
+          <GlassSurface tone="accent" radius={radius.pill} shadow="none" style={styles.priceChip}>
             <Text style={styles.priceChipText}>₾{offer.price}</Text>
-          </View>
+          </GlassSurface>
           {onRemove ? (
-            <Pressable onPress={handleDelete} style={styles.deleteBtn} accessibilityLabel={t('Delete')}>
-              <Text style={styles.deleteBtnText}>✕</Text>
+            <Pressable onPress={handleDelete} accessibilityLabel={t('Delete')}>
+              <GlassSurface tone="soft" radius={radius.pill} shadow="none" style={styles.deleteBtn}>
+                <Text style={styles.deleteBtnText}>✕</Text>
+              </GlassSurface>
             </Pressable>
           ) : null}
         </View>
@@ -628,201 +533,89 @@ function MyOfferCard({ offer, onRemove }) {
         <Text style={styles.myCardDesc}>{offer.description}</Text>
 
         <View style={styles.myCardFooter}>
-          <Text style={styles.myCardLocIcon}>📍</Text>
+          <View style={styles.locDot} />
           <Text style={styles.myCardLoc} numberOfLines={1}>{offer.location}</Text>
         </View>
 
         {Array.isArray(offer.images) && offer.images.length > 0 ? (
           <View style={styles.myCardPhotos}>
             {offer.images.map((src, i) => (
-              <BgImage
-                key={i}
-                source={src}
-                resizeMode="cover"
-                style={styles.myCardPhoto}
-              />
+              <View key={i} style={styles.myCardPhoto}>
+                <BgImage source={src} resizeMode="cover" style={styles.myCardPhotoImage} />
+              </View>
             ))}
           </View>
         ) : null}
-      </View>
+      </GlassSurface>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  safe: { flex: 1 },
+  container: { flex: 1 },
 
   // Hero
   heroOuter: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingTop: 6,
+    paddingBottom: 12,
   },
   hero: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.accentSoftBorder,
   },
   heroTopRow: {
     alignSelf: 'stretch',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   avatarRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#fff',
+    width: 78,
+    height: 78,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-    marginBottom: 6,
-    boxShadow: '0 6px 18px rgba(122, 18, 48, 0.18)',
+    marginTop: 4,
+    marginBottom: 10,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     overflow: 'hidden',
   },
-  avatarPlus: { color: '#fff', fontWeight: '300', fontSize: 30, lineHeight: 32 },
+  avatarEmpty: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 31,
+    backgroundColor: ACCENT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlus: { color: '#fff', fontWeight: '300', fontSize: 32, lineHeight: 34 },
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 28,
-    backgroundColor: colors.surfaceAlt,
+    borderRadius: 31,
   },
   profileName: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: colors.text,
     textAlign: 'center',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   profileSub: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: 3,
     textAlign: 'center',
-  },
-
-  form: { paddingHorizontal: 20, paddingTop: 18 },
-
-  myList: { paddingHorizontal: 16, paddingTop: 18 },
-
-  // Empty / loading
-  empty: { alignItems: 'center', paddingTop: 60 },
-  emptyDot: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginBottom: 16,
-  },
-  emptyTitle: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
-  emptySub: { fontSize: 13, color: colors.textTertiary, marginTop: 6, textAlign: 'center', paddingHorizontal: 20 },
-
-  // Card
-  myCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 26,
-    marginBottom: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
-  },
-  myCardImage: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: colors.surfaceAlt,
-  },
-  myCardImagePlaceholder: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  spinDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  myCardImagePlaceholderText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-  },
-  myCardBody: { padding: 16 },
-  myCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  priceChip: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.accentSoftBorder,
-  },
-  priceChipText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: ACCENT,
-    letterSpacing: -0.2,
-  },
-  myCardDesc: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  myCardFooter: { flexDirection: 'row', alignItems: 'center' },
-  myCardLocIcon: { fontSize: 12, marginRight: 6 },
-  myCardLoc: { fontSize: 12, color: colors.textSecondary, flexShrink: 1 },
-  myCardPhotos: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  myCardPhoto: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
-    backgroundColor: colors.surfaceAlt,
-  },
-
-  deleteBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  deleteBtnText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '700',
-    lineHeight: 14,
+    fontWeight: '600',
   },
   quotaRow: {
     flexDirection: 'row',
@@ -832,279 +625,214 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
   },
-  tierBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
+  quotaPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
   },
-  tierBadgeFree: {
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
-  tierBadgePro: {
-    borderColor: ACCENT,
-    backgroundColor: ACCENT,
-  },
-  tierBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  tierBadgeTextFree: { color: colors.textSecondary },
-  tierBadgeTextPro: { color: '#fff' },
   quotaText: {
     fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  upgradeLink: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  upgradeLinkText: {
-    fontSize: 12,
-    color: ACCENT,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textDecorationLine: 'underline',
-  },
-});
-
-const tabStyles = StyleSheet.create({
-  outer: {
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  inner: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 999,
-    padding: 4,
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  thumb: {
-    position: 'absolute',
-    top: 4,
-    bottom: 4,
-    left: 4,
-    backgroundColor: '#fff',
-    borderRadius: 999,
-    boxShadow: '0 2px 8px rgba(15, 15, 30, 0.10)',
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 999,
-  },
-  text: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  textActive: {
-    color: ACCENT,
     fontWeight: '700',
   },
-});
-
-const btnStyles = StyleSheet.create({
-  base: {
+  tierBadgePro: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
     backgroundColor: ACCENT,
-    borderRadius: 999,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 12px 28px rgba(122, 18, 48, 0.34)',
   },
-  text: {
+  tierBadgeTextPro: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
     color: '#fff',
+  },
+
+  tabsWrap: { paddingHorizontal: 20, marginBottom: 4 },
+
+  form: { paddingHorizontal: 20, paddingTop: 12 },
+  myList: { paddingHorizontal: 16, paddingTop: 16 },
+
+  fieldBlock: { marginTop: 18 },
+  fieldLabel: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+    marginBottom: 8,
+    marginLeft: 6,
+  },
+  currencyMark: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.accent,
+    paddingLeft: 16,
+  },
+  plainInputWrap: { paddingHorizontal: 2 },
+  plainInput: {
+    paddingHorizontal: 16,
+    paddingVertical: 15,
     fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-});
-
-const pillStyles = StyleSheet.create({
-  base: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.accentSoftBorder,
-    backgroundColor: '#fff',
-  },
-  text: {
-    fontSize: 12,
-    color: ACCENT,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-});
-
-const fieldStyles = StyleSheet.create({
-  wrap: { marginTop: 16 },
-  label: { ...typography.label, marginBottom: 8, marginLeft: 4 },
-  inputWrap: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    paddingHorizontal: 4,
-    ...shadows.card,
-  },
-  inputWrapFocused: {
-    borderColor: colors.accent,
-    boxShadow: '0 0 0 4px rgba(122, 18, 48, 0.12)',
-  },
-  textAreaWrap: {
-    borderRadius: 22,
-  },
-  input: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 14,
     color: colors.text,
   },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-    paddingTop: 14,
-  },
-});
 
-const photoStyles = StyleSheet.create({
-  thumbRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
+  // Empty / loading
+  emptyCard: {
+    alignItems: 'center',
+    paddingVertical: 44,
+    paddingHorizontal: 24,
+    marginTop: 24,
   },
-  thumbWrap: {
-    width: 76,
-    height: 76,
-    position: 'relative',
-  },
-  thumb: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20,
-    backgroundColor: colors.surfaceAlt,
+  emptyOrb: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: glass.accentFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: glass.accentStroke,
   },
-  removeBtn: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
+  emptyOrbCore: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.accent,
+    opacity: 0.85,
   },
-  removeBtnText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 11,
-  },
-  addBtn: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 56,
-  },
-  addBtnIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  addBtnPlus: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: ACCENT,
-    lineHeight: 20,
-  },
-  addBtnText: {
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  emptySub: {
     fontSize: 13,
-    fontWeight: '700',
+    color: colors.textTertiary,
+    marginTop: 6,
+    textAlign: 'center',
+    paddingHorizontal: 10,
+    lineHeight: 19,
+  },
+
+  // My offer card
+  myCardWrap: { marginBottom: 20 },
+  myCardImageFrame: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: glass.stroke,
+    backgroundColor: colors.surfaceAlt,
+    shadowColor: '#0F0F1E',
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
+  },
+  myCardImage: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+  },
+  myCardImagePlaceholder: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  spinDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    marginRight: 8,
+    backgroundColor: ACCENT,
+  },
+  myCardImagePlaceholderText: {
+    fontSize: 12,
     color: colors.textSecondary,
     letterSpacing: 0.3,
-  },
-});
-
-const locStyles = StyleSheet.create({
-  modeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 999,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modeBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  modeBtnActive: {
-    backgroundColor: '#fff',
-    boxShadow: '0 2px 8px rgba(15, 15, 30, 0.10)',
-  },
-  modeBtnText: {
-    fontSize: 12,
     fontWeight: '600',
-    color: colors.textSecondary,
-    letterSpacing: 0.2,
   },
-  modeBtnTextActive: {
+  myCardPanel: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+  },
+  myCardPanelOverlap: {
+    marginTop: -42,
+    marginHorizontal: 12,
+  },
+  myCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  priceChip: {
+    paddingHorizontal: 15,
+    paddingVertical: 7,
+  },
+  priceChipText: {
+    fontSize: 16,
+    fontWeight: '800',
     color: ACCENT,
-    fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  gpsBox: {
-    backgroundColor: colors.surface,
+  myCardDesc: {
+    fontSize: 14.5,
+    color: colors.text,
+    lineHeight: 21,
+    marginBottom: 12,
+    fontWeight: '500',
+  },
+  myCardFooter: { flexDirection: 'row', alignItems: 'center' },
+  locDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: colors.accent,
+    opacity: 0.55,
+    marginRight: 7,
+  },
+  myCardLoc: { fontSize: 12.5, color: colors.textSecondary, flexShrink: 1, fontWeight: '500' },
+  myCardPhotos: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  myCardPhoto: {
+    width: 74,
+    height: 74,
+    borderRadius: 20,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 24,
+    borderColor: glass.stroke,
+    backgroundColor: colors.surfaceAlt,
+  },
+  myCardPhotoImage: { width: '100%', height: '100%' },
+
+  deleteBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtnText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '800',
+    lineHeight: 15,
+  },
+
+  // GPS box
+  gpsBox: {
     padding: 16,
     alignItems: 'stretch',
-    ...shadows.card,
   },
   gpsCenter: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   gpsTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
     marginBottom: 4,
     textAlign: 'center',
@@ -1117,54 +845,104 @@ const locStyles = StyleSheet.create({
     textAlign: 'center',
   },
   mapWrap: {
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: glass.stroke,
   },
   gpsFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 14,
     gap: 10,
   },
   gpsCoords: {
     fontSize: 12,
     color: colors.textSecondary,
     flexShrink: 1,
+    fontWeight: '500',
   },
   gpsHint: {
     fontSize: 13,
     color: colors.textTertiary,
-    marginBottom: 14,
-    lineHeight: 18,
+    marginBottom: 16,
+    lineHeight: 19,
     textAlign: 'center',
   },
-  gpsBtn: {
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 999,
-    alignSelf: 'center',
-    boxShadow: '0 8px 20px rgba(122, 18, 48, 0.28)',
+
+  // Photos
+  thumbRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 12,
   },
-  gpsBtnText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.4,
+  thumbWrap: {
+    width: 76,
+    height: 76,
+    position: 'relative',
   },
-  gpsRefresh: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
+  thumb: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: glass.stroke,
     backgroundColor: colors.surfaceAlt,
   },
-  gpsRefreshText: {
-    fontSize: 12,
-    color: colors.textSecondary,
+  thumbImage: { width: '100%', height: '100%' },
+  removeBtn: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    width: 25,
+    height: 25,
+    borderRadius: 13,
+    backgroundColor: colors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  removeBtnText: {
+    color: '#fff',
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    lineHeight: 12,
+  },
+  addBtn: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    minHeight: 60,
+    borderStyle: 'dashed',
+    borderColor: glass.accentStroke,
+  },
+  addBtnIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: glass.accentFillMd,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  addBtnPlus: {
+    fontSize: 19,
+    fontWeight: '500',
+    color: ACCENT,
+    lineHeight: 21,
+  },
+  addBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.textSecondary,
+    letterSpacing: 0.3,
   },
 });
