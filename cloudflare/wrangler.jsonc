@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "helpme-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+
+  // Observability keeps console.log output visible in the Cloudflare
+  // dashboard and to `wrangler tail`, which is how we debug this in
+  // production (there is no Metro server for a released app).
+  "observability": {
+    "enabled": true
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "helpme-db",
+      "database_id": "7cb63079-68cf-4834-af10-4307f1f1321d"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "IMAGES",
+      "id": "9a78980872ea41298fd569860863b9b0"
+    }
+  ],
+
+  // Lets src/index.js `import` the privacy / delete-account pages as plain
+  // strings, so they stay editable as real .html files.
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.html"],
+      "fallthrough": true
+    }
+  ]
+
+  // Secrets are NOT listed here - they are set with `wrangler secret put`
+  // or in the Cloudflare dashboard, so they never land in git:
+  //   TWILIO_ACCOUNT_SID
+  //   TWILIO_AUTH_TOKEN
+  //   TWILIO_VERIFY_SERVICE_SID
+  //   OPENAI_API_KEY
+  //   TEST_PHONE
+  //   TEST_OTP
+}

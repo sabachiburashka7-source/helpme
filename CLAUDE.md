@@ -3,7 +3,7 @@
 ## What this project is
 
 A **native Android app** (Expo SDK 54 + React Native 0.81 + Hermes)
-targeting Google Play Store. Vercel hosts the backend API only.
+targeting Google Play Store. Cloudflare Workers host the backend API only.
 
 **There is no web client.** It was removed. Do NOT:
 
@@ -26,7 +26,7 @@ App folder: `helpme/`
 - **Package name (permanent):** `com.sabachiburashka.helpme`
 - **Versioning:** bump `expo.android.versionCode` in `app.json` for every
   Play Store upload.
-- **API base URL:** `https://helpme-jade-tau.vercel.app` (read from
+- **API base URL:** `https://helpme-api.semolina.workers.dev` (read from
   `Constants.expoConfig.extra.apiBaseUrl` via `components/apiBase.js`).
 
 ## GitHub
@@ -105,7 +105,7 @@ If a clone reappears, also run:
 | File | What it does |
 |---|---|
 | `components/storage.js` | AsyncStorage wrapper. `getItem/setItem/removeItem`. |
-| `components/apiBase.js` | `apiUrl('/api/...')` -> absolute Vercel URL. Always use this; never bare relative `/api/...`. |
+| `components/apiBase.js` | `apiUrl('/api/...')` -> absolute Cloudflare Worker URL. Always use this; never bare relative `/api/...`. |
 | `components/location.js` | `getCurrentLocation()` via `expo-location`. |
 | `components/profileImage.js` | `pickProfileImage` / `pickOfferImages` via `expo-image-picker`, returning data URLs. |
 | `components/MapPicker.js` | MapLibre map inside `react-native-webview`. Used for both picking (draggable) and detail view (`draggable={false}`). No Google Maps API key needed — tiles from openfreemap. |
@@ -158,27 +158,76 @@ break the map silently. The HTML catches `window.onerror` and posts
 errors back via `ReactNativeWebView.postMessage` so the React side can
 show an overlay. Preserve this debugging.
 
-## Vercel backend (API only)
+## Cloudflare backend (API only)
 
-- Project: `helpme` (team: `lepton-projects3`).
-- Production URL: `https://helpme-jade-tau.vercel.app`.
-- API functions: `api/auth.js`, `api/offers.js`, `api/generate-image.js`,
-  `api/delete-account.js`, `api/privacy.js` (HTML privacy policy served at
-  `/privacy` — this URL goes in the Play Console listing).
-- `vercel.json` routes `/api/*` plus `/privacy` and `/delete-account` — no
-  general static content is served.
-- Auto-deploys on push to main.
+Migrated off Vercel + Supabase on 2026-08-31. Reason: the Supabase free
+project auto-paused after inactivity (its DNS stopped resolving), which
+took the whole app down and silently failed a 14-day closed test — and
+Vercel's Hobby plan forbids commercial use. Cloudflare's free tier does
+neither.
 
-### Environment variables (Vercel -> Project Settings -> Environment Variables)
+- Worker: `helpme-api` — **https://helpme-api.semolina.workers.dev**
+- Source lives in `helpme/cloudflare/`:
+  - `src/index.js` — the whole API: one router, all endpoints.
+  - `src/privacy.html`, `src/delete-account.html` — served as-is. Pulled
+    in via the `Text` rule in `wrangler.jsonc`, so edit them as normal
+    HTML (no escaping).
+  - `schema.sql` — D1 tables. Safe to re-run (`IF NOT EXISTS`).
+  - `wrangler.jsonc` — bindings. Secrets are deliberately NOT here.
+- **D1 database** `helpme-db` (region EEUR), binding `DB`. Tables `users`
+  and `offers`. Replaces Supabase Postgres.
+- **KV namespace** `IMAGES`, binding `IMAGES`. Holds the generated PNGs
+  and replaces Supabase Storage; they are served back by the Worker at
+  `/api/image/<offer-id>.png`, so the app still just stores a URL string.
+- Routes: `/api/auth`, `/api/offers`, `/api/update-offer`,
+  `/api/generate-image`, `/api/image/<id>.png`, `/privacy`,
+  `/delete-account`, and `/health` (liveness probe).
+- **Does NOT auto-deploy on push.** Deploy explicitly:
 
-- `OPENAI_API_KEY` — required by `/api/generate-image` for auto-illustrations.
-  Without it, requests get a category placeholder.
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY` — required by `/api/auth` and
-  `/api/offers`.
+```bash
+cd helpme/cloudflare
+npx wrangler deploy
+```
+
+### Postgres -> SQLite conversions (already handled in `src/index.js`)
+
+D1 is SQLite, so the API layer converts on the way in and out. Preserve
+this or the app will receive the wrong shapes:
+
+- `uuid` -> `TEXT` holding `crypto.randomUUID()`.
+- `timestamptz` -> `TEXT` holding an ISO-8601 UTC string.
+- `text[]` (`offers.images`) -> `TEXT` holding a JSON array. `shapeOffer()`
+  parses it back into a real array before responding.
+- No Node built-ins: use `btoa`/`atob`, not `Buffer`. There is no
+  `nodejs_compat` flag set.
+
+### Secrets (Cloudflare dashboard -> Workers -> helpme-api -> Settings -> Variables)
+
+Set as **encrypted secrets**, never in `wrangler.jsonc`:
+
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` —
-  required by `/api/auth` for SMS OTP signup/login via Twilio Verify.
-  Verify Service SID starts with `VA`. Georgia must be enabled at
-  console.twilio.com -> Verify -> Settings -> Geo Permissions.
+  `/api/auth` SMS OTP via Twilio Verify. Verify Service SID starts with
+  `VA`. Georgia must be enabled at console.twilio.com -> Verify ->
+  Settings -> Geo Permissions.
+- `OPENAI_API_KEY` — `/api/generate-image`. **Without it, offers get no
+  illustration — and `BrowseScreen.js:136` filters to `o.image`, so an
+  offer with no picture never appears in Browse at all.**
+- `TEST_PHONE`, `TEST_OTP` — the SMS bypass. When the inbound phone
+  equals `TEST_PHONE`, no SMS is sent and the code is checked locally
+  against `TEST_OTP`. This is how Play reviewers and paid closed testers
+  (who cannot receive a Georgian SMS) sign in. Both must be set for the
+  bypass to activate.
+
+### Debugging the backend
+
+```bash
+cd helpme/cloudflare
+npx wrangler tail                                   # live logs
+npx wrangler d1 execute helpme-db --remote --command="SELECT COUNT(*) FROM offers;"
+```
+
+The old Vercel handlers are still in `helpme/api/` as a rollback
+reference. They are dead code — nothing deploys them.
 
 ## Rules
 
@@ -212,7 +261,7 @@ show an overlay. Preserve this debugging.
 | Rebrand to "Kheli" (name, icon, splash, adaptive icon) | Done |
 | Generate real release keystore + reconfigure `signingConfigs.release` | Done (`android/app/helpme-release.keystore`, loaded via `android/keystore.properties`, both gitignored) |
 | Build production AAB (`./gradlew bundleRelease`) | Done (`android/app/build/outputs/bundle/release/app-release.aab`) |
-| Privacy Policy URL hosted | Done (https://helpme-jade-tau.vercel.app/privacy via `api/privacy.js`) |
+| Privacy Policy URL hosted | Done (https://helpme-api.semolina.workers.dev/privacy via `cloudflare/src/privacy.html`) — **update this URL in the Play Console listing** |
 | In-app Privacy Policy link | Done (Profile "Legal" section + Auth consent line, open via native `Linking`) |
 | Trim unused sensitive permissions | Done (removed `RECORD_AUDIO`/`SYSTEM_ALERT_WINDOW`; capped legacy storage perms in `AndroidManifest.xml`) |
 | In-app account deletion | Done (`/api/delete-account` + Profile screen) |

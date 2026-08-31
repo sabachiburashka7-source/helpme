@@ -52,3 +52,9 @@ yarn-error.*
 /android/keystore.properties
 /android/app/helpme-release.keystore
 /android/app/*.keystore
+
+# Vercel CLI
+.vercel
+
+.vercel
+.env*

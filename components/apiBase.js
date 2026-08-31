@@ -1,6 +1,6 @@
-// Resolves API URLs by prepending the Vercel backend URL configured in
-// app.json -> extra.apiBaseUrl. The native app has no "origin", so every
-// /api/... path must be absolute.
+// Resolves API URLs by prepending the Cloudflare Worker backend URL
+// configured in app.json -> extra.apiBaseUrl. The native app has no
+// "origin", so every /api/... path must be absolute.
 
 import Constants from 'expo-constants';
 
