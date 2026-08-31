@@ -16,8 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import ProfileScreen from './ProfileScreen';
 import {
-  AmbientBackground, GlassSurface, GlassField, GlassButton, GlassSegmented,
-  GlassChip, PressableGlass,
+  AmbientBackground, GlassSurface, GlassPanel, GlassField, GlassButton,
+  GlassSegmented, GlassChip, PressableGlass,
 } from '../components/Glass';
 
 const MAX_OFFER_IMAGES = 6;
@@ -236,7 +236,13 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
           <View style={styles.container}>
             <FadeInUp>
               <View style={styles.heroOuter}>
-                <GlassSurface tone="light" radius={32} shadow="lifted" style={styles.hero}>
+                <GlassPanel
+                  tone="light"
+                  radius={32}
+                  intensity={44}
+                  style={styles.hero}
+                  contentStyle={styles.heroInner}
+                >
                   <View style={styles.heroTopRow}>
                     <LanguageSwitcher />
                     <GlassChip label={t('Profile')} onPress={() => setProfileOpen(true)} />
@@ -290,7 +296,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                       </Text>
                     </GlassSurface>
                   </View>
-                </GlassSurface>
+                </GlassPanel>
               </View>
             </FadeInUp>
 
@@ -511,11 +517,13 @@ function MyOfferCard({ offer, onRemove }) {
         </View>
       ) : null}
 
-      <GlassSurface
+      <GlassPanel
         tone="strong"
         radius={28}
-        shadow="base"
+        intensity={48}
+        blur={hasVisual}
         style={[styles.myCardPanel, hasVisual && styles.myCardPanelOverlap]}
+        contentStyle={styles.myCardPanelInner}
       >
         <View style={styles.myCardTop}>
           <GlassSurface tone="accent" radius={radius.pill} shadow="none" style={styles.priceChip}>
@@ -546,7 +554,7 @@ function MyOfferCard({ offer, onRemove }) {
             ))}
           </View>
         ) : null}
-      </GlassSurface>
+      </GlassPanel>
     </View>
   );
 }
@@ -562,7 +570,8 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 12,
   },
-  hero: {
+  hero: {},
+  heroInner: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
@@ -727,11 +736,11 @@ const styles = StyleSheet.create({
   },
   myCardImage: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 1 / 1,
   },
   myCardImagePlaceholder: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 1 / 1,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -749,13 +758,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     fontWeight: '600',
   },
-  myCardPanel: {
+  myCardPanel: {},
+  myCardPanelInner: {
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 16,
   },
   myCardPanelOverlap: {
-    marginTop: -42,
+    marginTop: -104,
     marginHorizontal: 12,
   },
   myCardTop: {

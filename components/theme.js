@@ -31,38 +31,53 @@ export const colors = {
 // (`stroke`) plus the diagonal `sheen` gradient is what makes a flat
 // translucent rectangle actually look like a pane of glass.
 export const glass = {
-  fill: 'rgba(255, 255, 255, 0.58)',
-  fillStrong: 'rgba(255, 255, 255, 0.78)',
-  fillSoft: 'rgba(255, 255, 255, 0.36)',
-  fillHollow: 'rgba(255, 255, 255, 0.14)',
+  // Deliberately low alpha: glass only reads as glass when whatever sits
+  // behind it is genuinely visible through it. Panels that carry body text
+  // over a photo use `fillStrong`; decorative panels use `fill`.
+  fill: 'rgba(255, 255, 255, 0.44)',
+  fillStrong: 'rgba(255, 255, 255, 0.62)',
+  fillSoft: 'rgba(255, 255, 255, 0.26)',
+  fillHollow: 'rgba(255, 255, 255, 0.12)',
 
-  stroke: 'rgba(255, 255, 255, 0.75)',
-  strokeSoft: 'rgba(228, 228, 231, 0.9)',
-  strokeInner: 'rgba(255, 255, 255, 0.9)',
+  // A bright rim is the strongest glass cue after transparency.
+  stroke: 'rgba(255, 255, 255, 0.90)',
+  strokeSoft: 'rgba(255, 255, 255, 0.55)',
+  strokeEdge: 'rgba(228, 228, 231, 0.75)',
 
   // #7A1230 at low alpha — tinted glass, still the brand color.
-  accentFill: 'rgba(122, 18, 48, 0.09)',
-  accentFillMd: 'rgba(122, 18, 48, 0.15)',
+  accentFill: 'rgba(122, 18, 48, 0.10)',
+  accentFillMd: 'rgba(122, 18, 48, 0.16)',
   accentFillStrong: 'rgba(122, 18, 48, 0.88)',
-  accentStroke: 'rgba(122, 18, 48, 0.22)',
-  accentStrokeStrong: 'rgba(122, 18, 48, 0.42)',
+  accentStroke: 'rgba(122, 18, 48, 0.24)',
+  accentStrokeStrong: 'rgba(122, 18, 48, 0.45)',
   accentGlow: 'rgba(122, 18, 48, 0.30)',
 
   // Smoked glass, for chips laid over photography.
-  darkFill: 'rgba(10, 10, 10, 0.42)',
-  darkFillStrong: 'rgba(10, 10, 10, 0.62)',
-  darkStroke: 'rgba(255, 255, 255, 0.30)',
+  darkFill: 'rgba(10, 10, 10, 0.34)',
+  darkFillStrong: 'rgba(10, 10, 10, 0.58)',
+  darkStroke: 'rgba(255, 255, 255, 0.38)',
 
   dangerFill: 'rgba(220, 38, 38, 0.10)',
-  dangerStroke: 'rgba(220, 38, 38, 0.26)',
+  dangerStroke: 'rgba(220, 38, 38, 0.28)',
 
-  // Diagonal light pass across a panel. Top-left catches the light.
-  sheen: ['rgba(255, 255, 255, 0.38)', 'rgba(255, 255, 255, 0.06)', 'rgba(255, 255, 255, 0)'],
-  sheenSoft: ['rgba(255, 255, 255, 0.20)', 'rgba(255, 255, 255, 0)'],
-  sheenDark: ['rgba(255, 255, 255, 0.18)', 'rgba(255, 255, 255, 0)'],
+  // Specular pass. The first stop is a bright, fast-decaying top edge —
+  // that hard little highlight along the top is what makes a translucent
+  // rectangle look like a physical pane.
+  sheen: [
+    'rgba(255, 255, 255, 0.85)',
+    'rgba(255, 255, 255, 0.16)',
+    'rgba(255, 255, 255, 0.02)',
+    'rgba(255, 255, 255, 0)',
+  ],
+  sheenLocations: [0, 0.045, 0.4, 1],
+  sheenDark: [
+    'rgba(255, 255, 255, 0.45)',
+    'rgba(255, 255, 255, 0.10)',
+    'rgba(255, 255, 255, 0)',
+  ],
+  sheenDarkLocations: [0, 0.08, 1],
 
-  // Backdrop behind modal glass.
-  scrim: 'rgba(10, 10, 18, 0.42)',
+  scrim: 'rgba(10, 10, 18, 0.45)',
 };
 
 export const radius = {

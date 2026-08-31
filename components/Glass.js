@@ -23,14 +23,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, glass, radius, shadows } from './theme';
 
 const TONES = {
-  light: { bg: glass.fill, border: glass.stroke, sheen: glass.sheen },
-  strong: { bg: glass.fillStrong, border: glass.stroke, sheen: glass.sheenSoft },
-  soft: { bg: glass.fillSoft, border: glass.strokeSoft, sheen: glass.sheenSoft },
-  hollow: { bg: glass.fillHollow, border: glass.stroke, sheen: glass.sheenSoft },
-  accent: { bg: glass.accentFill, border: glass.accentStroke, sheen: glass.sheenSoft },
-  dark: { bg: glass.darkFill, border: glass.darkStroke, sheen: glass.sheenDark },
-  danger: { bg: glass.dangerFill, border: glass.dangerStroke, sheen: glass.sheenSoft },
+  light: { bg: glass.fill, border: glass.stroke },
+  strong: { bg: glass.fillStrong, border: glass.stroke },
+  soft: { bg: glass.fillSoft, border: glass.strokeSoft },
+  hollow: { bg: glass.fillHollow, border: glass.strokeSoft },
+  accent: { bg: glass.accentFill, border: glass.accentStroke },
+  dark: { bg: glass.darkFill, border: glass.darkStroke, dark: true },
+  darkStrong: { bg: glass.darkFillStrong, border: glass.darkStroke, dark: true },
+  danger: { bg: glass.dangerFill, border: glass.dangerStroke },
 };
+
+function sheenFor(spec) {
+  return spec.dark
+    ? { colors: glass.sheenDark, locations: glass.sheenDarkLocations }
+    : { colors: glass.sheen, locations: glass.sheenLocations };
+}
 
 const SHADOWS = {
   none: null,
@@ -46,32 +53,24 @@ const SHADOWS = {
 export function AmbientBackground({ children, style }) {
   return (
     <View style={[styles.ambientRoot, style]}>
-      {/* Soft light. Full-screen gradient washes only — discrete shapes
-          (circles, stacked rings) band visibly on the device panel. */}
+      {/* Neutral light only. Smooth full-screen washes — discrete shapes and
+          stacked rings band visibly on the device panel. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <LinearGradient
-          colors={['#FFFFFF', colors.bg, colors.accentSoft]}
-          locations={[0, 0.5, 1]}
+          colors={['#FFFFFF', colors.bg, colors.border]}
+          locations={[0, 0.46, 1]}
           style={StyleSheet.absoluteFill}
         />
         <LinearGradient
-          colors={['rgba(122, 18, 48, 0.10)', 'rgba(122, 18, 48, 0.025)', 'rgba(122, 18, 48, 0)']}
-          locations={[0, 0.42, 1]}
-          start={{ x: 1, y: 0 }}
-          end={{ x: 0.05, y: 0.62 }}
+          colors={['rgba(255, 255, 255, 0.95)', 'rgba(255, 255, 255, 0)']}
+          start={{ x: 0.05, y: 0 }}
+          end={{ x: 0.85, y: 0.5 }}
           style={StyleSheet.absoluteFill}
         />
         <LinearGradient
-          colors={['rgba(122, 18, 48, 0)', 'rgba(122, 18, 48, 0.07)']}
-          locations={[0.45, 1]}
-          start={{ x: 0, y: 0.4 }}
-          end={{ x: 0.75, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <LinearGradient
-          colors={['rgba(255, 255, 255, 0.55)', 'rgba(255, 255, 255, 0)']}
-          start={{ x: 0, y: 0.18 }}
-          end={{ x: 0.9, y: 0.7 }}
+          colors={['rgba(24, 24, 27, 0)', 'rgba(24, 24, 27, 0.055)']}
+          start={{ x: 0.15, y: 0.42 }}
+          end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
       </View>
@@ -112,15 +111,73 @@ export function GlassSurface({
 
   if (!sheen) return <View style={base}>{children}</View>;
 
+  const ramp = sheenFor(spec);
   return (
     <LinearGradient
-      colors={spec.sheen}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
+      colors={ramp.colors}
+      locations={ramp.locations}
+      start={{ x: 0.25, y: 0 }}
+      end={{ x: 0.75, y: 1 }}
       style={base}
     >
       {children}
     </LinearGradient>
+  );
+}
+
+// A frosted panel with a real blur behind it. Padding goes in
+// `contentStyle`, never in `style`: the blur/tint/sheen layers are
+// absolutely positioned, and Yoga insets absolute children by the
+// parent's padding, so padding on the outer view would shrink them to the
+// content box and leave a hard-edged rectangle.
+//
+// Use this where something worth seeing sits behind the panel — a photo,
+// the avatar, scrolling content. Blur is what makes the glass legible AND
+// transparent at the same time. Never inside a `Modal` (Android's blur
+// misrenders there); pass `blur={false}` in that case.
+export function GlassPanel({
+  tone = 'strong',
+  radius: r = 26,
+  blur = true,
+  intensity = 42,
+  shadow = 'none',
+  style,
+  contentStyle,
+  children,
+}) {
+  const spec = TONES[tone] || TONES.strong;
+  const ramp = sheenFor(spec);
+  return (
+    <View
+      style={[
+        { borderRadius: r, overflow: 'hidden', borderWidth: 1, borderColor: spec.border },
+        SHADOWS[shadow],
+        style,
+      ]}
+    >
+      {blur ? (
+        <BlurView
+          intensity={intensity}
+          tint="light"
+          experimentalBlurMethod="dimezisBlurView"
+          blurReductionFactor={4}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: spec.bg }]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={ramp.colors}
+        locations={ramp.locations}
+        start={{ x: 0.25, y: 0 }}
+        end={{ x: 0.75, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={contentStyle}>{children}</View>
+    </View>
   );
 }
 

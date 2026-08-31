@@ -7,7 +7,8 @@ import { BgImage } from '../components/BgImage';
 import { isImageUrl } from '../components/profileImage';
 import { apiUrl } from '../components/apiBase';
 import {
-  AmbientBackground, GlassSurface, GlassButton, SectionLabel, PressableGlass,
+  AmbientBackground, GlassSurface, GlassPanel, GlassButton, SectionLabel,
+  PressableGlass,
 } from '../components/Glass';
 
 const ACCENT = '#7A1230';
@@ -139,7 +140,13 @@ export default function ProfileScreen({
 
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             {/* Identity card */}
-            <GlassSurface tone="light" radius={32} shadow="lifted" style={styles.identityCard}>
+            <GlassPanel
+              tone="light"
+              radius={32}
+              blur={false}
+              style={styles.identityCard}
+              contentStyle={styles.identityCardInner}
+            >
               <GlassSurface tone="strong" radius={radius.pill} shadow="base" style={styles.avatarRing}>
                 <View style={styles.avatarWrap}>
                   {isImageUrl(user.profile_image) ? (
@@ -155,7 +162,7 @@ export default function ProfileScreen({
               </GlassSurface>
               <Text style={styles.identityName} numberOfLines={1}>{user.name}</Text>
               {user.phone ? <Text style={styles.identityPhone}>{user.phone}</Text> : null}
-            </GlassSurface>
+            </GlassPanel>
 
             {/* Subscription card — only rendered for Pro users. The Pro upgrade
                 flow is hidden in v1 since Google Play Billing isn't wired yet;
@@ -264,7 +271,8 @@ const styles = StyleSheet.create({
 
   scroll: { paddingHorizontal: 16, paddingBottom: 36, paddingTop: 6 },
 
-  identityCard: {
+  identityCard: {},
+  identityCardInner: {
     paddingVertical: 26,
     paddingHorizontal: 18,
     alignItems: 'center',

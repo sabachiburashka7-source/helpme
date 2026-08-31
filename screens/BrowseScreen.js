@@ -14,8 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import MapPicker from '../components/MapPicker';
 import {
-  AmbientBackground, BlurSurface, GlassSurface, GlassChip, GlassButton,
-  PressableGlass, usePressScale,
+  AmbientBackground, BlurSurface, GlassSurface, GlassPanel, GlassChip,
+  GlassButton, PressableGlass, usePressScale,
 } from '../components/Glass';
 
 function useDisplayLocation(offer) {
@@ -445,7 +445,7 @@ function OfferCard({ offer, onPress }) {
             ) : null}
           </BgImage>
           <GlassSurface
-            tone="dark"
+            tone="darkStrong"
             radius={radius.pill}
             shadow="subtle"
             style={styles.cardPriceTag}
@@ -454,7 +454,13 @@ function OfferCard({ offer, onPress }) {
           </GlassSurface>
         </View>
 
-        <GlassSurface tone="strong" radius={26} shadow="base" style={styles.cardPanel}>
+        <GlassPanel
+          tone="strong"
+          radius={26}
+          intensity={48}
+          style={styles.cardPanel}
+          contentStyle={styles.cardPanelInner}
+        >
           <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
           <View style={styles.cardBottomRow}>
             <Text style={styles.cardName} numberOfLines={1}>{offer.name}</Text>
@@ -463,7 +469,7 @@ function OfferCard({ offer, onPress }) {
               <Text style={styles.cardLoc} numberOfLines={1}>{displayLocation}</Text>
             </View>
           </View>
-        </GlassSurface>
+        </GlassPanel>
       </View>
     </PressableGlass>
   );
@@ -746,7 +752,7 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     width: '100%',
-    aspectRatio: 4 / 3,
+    aspectRatio: 1 / 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -774,9 +780,14 @@ const styles = StyleSheet.create({
   },
   imageLoadingText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
 
+  // Sits almost entirely on the photo: the blurred image showing through is
+  // the whole point — that is what reads as glass.
   cardPanel: {
-    marginTop: -42,
+    marginTop: -104,
     marginHorizontal: 12,
+    marginBottom: 12,
+  },
+  cardPanelInner: {
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 14,

@@ -11,7 +11,7 @@ import { apiUrl } from '../components/apiBase';
 import { BgImage } from '../components/BgImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  AmbientBackground, GlassSurface, GlassField, GlassButton, GlassSegmented,
+  AmbientBackground, GlassSurface, GlassPanel, GlassField, GlassButton, GlassSegmented,
 } from '../components/Glass';
 
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -185,7 +185,13 @@ export default function AuthScreen({ onAuthenticated }) {
             </FadeInUp>
 
             <FadeInUp delay={90}>
-              <GlassSurface tone="light" radius={34} shadow="lifted" style={styles.panel}>
+              <GlassPanel
+                tone="light"
+                radius={34}
+                intensity={44}
+                style={styles.panel}
+                contentStyle={styles.panelInner}
+              >
                 {step === 'details' ? (
                   <GlassSegmented
                     tabs={[
@@ -344,7 +350,7 @@ export default function AuthScreen({ onAuthenticated }) {
                     </Text>
                   </Text>
                 </Pressable>
-              </GlassSurface>
+              </GlassPanel>
             </FadeInUp>
 
             <Text style={styles.legalNote}>
@@ -405,6 +411,11 @@ const styles = StyleSheet.create({
   },
 
   panel: {
+    // Padding lives in `panelInner` — GlassPanel's blur/tint layers are
+    // absolute and would be shrunk by padding on the outer view.
+    marginTop: 4,
+  },
+  panelInner: {
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 18,
