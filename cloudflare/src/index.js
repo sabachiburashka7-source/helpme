@@ -27,6 +27,19 @@ import DELETE_ACCOUNT_HTML from './delete-account.html';
 
 const POST_QUOTA = { free: 3, pro: 15 };
 
+// The six secrets are pre-created in the dashboard with this placeholder so
+// the rows exist and can be edited without retyping their names. Until a real
+// value replaces it, treat the secret as absent - otherwise a placeholder is
+// a truthy string and the request fails deep inside Twilio/OpenAI with a
+// confusing error instead of our clear "not configured" one.
+const SECRET_PLACEHOLDER = 'REPLACE_ME';
+
+function secret(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  return !trimmed || trimmed === SECRET_PLACEHOLDER ? '' : trimmed;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -145,9 +158,9 @@ async function handleAuth(request, env) {
   const db = env.DB;
   if (!db) return json({ error: 'Database not configured' }, 500);
 
-  const twilioSid = env.TWILIO_ACCOUNT_SID;
-  const twilioToken = env.TWILIO_AUTH_TOKEN;
-  const twilioVerifySid = env.TWILIO_VERIFY_SERVICE_SID;
+  const twilioSid = secret(env.TWILIO_ACCOUNT_SID);
+  const twilioToken = secret(env.TWILIO_AUTH_TOKEN);
+  const twilioVerifySid = secret(env.TWILIO_VERIFY_SERVICE_SID);
   const twilioConfigured = Boolean(twilioSid && twilioToken && twilioVerifySid);
 
   async function twilioVerify(path, params) {
@@ -232,8 +245,8 @@ async function handleAuth(request, env) {
   // testers, who cannot receive a Georgian SMS) log in without an SMS.
   // Activated only when both env vars are set and the inbound phone matches.
   // The OTP is checked locally instead of via Twilio Verify.
-  const testPhone = normalizePhone(env.TEST_PHONE || '');
-  const testOtp = (env.TEST_OTP || '').trim();
+  const testPhone = normalizePhone(secret(env.TEST_PHONE));
+  const testOtp = secret(env.TEST_OTP);
   const isTestPhone = Boolean(testPhone && testOtp && cleanPhone === testPhone);
 
   if (action === 'update_profile_image') {
@@ -511,7 +524,7 @@ async function handleGenerateImage(request, env) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  const apiKey = env.OPENAI_API_KEY;
+  const apiKey = secret(env.OPENAI_API_KEY);
   if (!apiKey) {
     return json({ error: 'OPENAI_API_KEY not configured on server' }, 500);
   }
