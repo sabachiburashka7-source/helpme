@@ -144,6 +144,16 @@ which is just those same colors at low alpha.
   still has **no fixed `height`** — bottom-tabs adds the gesture inset.
 - **Keep the palette.** Glass means the same colors at lower alpha, never
   new hues.
+- **No `elevation` on a translucent, large-radius view.** Android paints a
+  fill inset from the edges by the corner radius, which shows up as a
+  hard-edged bright rectangle inside the panel. Glass surfaces carry
+  `elevation: 0` (see the note in `theme.js`); only opaque things — the
+  accent button, image frames — get elevation. Bright rim + translucent
+  fill is what makes glass float.
+- **Absolute children are inset by the parent's padding in Yoga** (unlike
+  CSS). An overlay using `StyleSheet.absoluteFill` inside a padded panel
+  covers only the content box. `GlassSurface` therefore paints its sheen
+  as its own `LinearGradient` container rather than as an overlay.
 - Native deps this relies on: `expo-blur`, `expo-linear-gradient`. Both
   are autolinked; a JS-only change needs no prebuild, but the APK must be
   rebuilt after they were added.

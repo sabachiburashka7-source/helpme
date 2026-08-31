@@ -57,9 +57,9 @@ export const glass = {
   dangerStroke: 'rgba(220, 38, 38, 0.26)',
 
   // Diagonal light pass across a panel. Top-left catches the light.
-  sheen: ['rgba(255, 255, 255, 0.60)', 'rgba(255, 255, 255, 0.10)', 'rgba(255, 255, 255, 0)'],
-  sheenSoft: ['rgba(255, 255, 255, 0.34)', 'rgba(255, 255, 255, 0)'],
-  sheenDark: ['rgba(255, 255, 255, 0.22)', 'rgba(255, 255, 255, 0)'],
+  sheen: ['rgba(255, 255, 255, 0.38)', 'rgba(255, 255, 255, 0.06)', 'rgba(255, 255, 255, 0)'],
+  sheenSoft: ['rgba(255, 255, 255, 0.20)', 'rgba(255, 255, 255, 0)'],
+  sheenDark: ['rgba(255, 255, 255, 0.18)', 'rgba(255, 255, 255, 0)'],
 
   // Backdrop behind modal glass.
   scrim: 'rgba(10, 10, 18, 0.42)',
@@ -101,27 +101,32 @@ export const typography = {
 };
 
 export const shadows = {
-  // Glass floats — wide, soft, low-opacity drops rather than tight ones.
+  // Android note: `elevation` on a translucent view with a large
+  // `borderRadius` paints a fill inset from the edges by the radius — it
+  // shows up as a hard-edged bright rectangle inside the panel. Glass
+  // surfaces therefore carry NO elevation; their bright rim and the
+  // translucent fill do the floating. Elevation is only used on opaque
+  // things (the accent button, image frames).
   glass: {
     shadowColor: '#0F0F1E',
     shadowOpacity: 0.1,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
+    elevation: 0,
   },
   glassLifted: {
     shadowColor: '#0F0F1E',
     shadowOpacity: 0.16,
     shadowRadius: 34,
     shadowOffset: { width: 0, height: 18 },
-    elevation: 10,
+    elevation: 0,
   },
   glassSubtle: {
     shadowColor: '#0F0F1E',
     shadowOpacity: 0.07,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 5 },
-    elevation: 3,
+    elevation: 0,
   },
   card: {
     shadowColor: '#0F0F1E',
@@ -142,7 +147,7 @@ export const shadows = {
     shadowOpacity: 0.32,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 7,
+    elevation: 4,
   },
 };
 

@@ -43,67 +43,36 @@ const SHADOWS = {
 /* Ambient background                                                  */
 /* ------------------------------------------------------------------ */
 
-// A radial glow faked by stacking concentric circles of the same very low
-// alpha — the overlap builds up towards the middle. Cheaper and smoother
-// than anything expo-linear-gradient can do in a circle.
-function SoftOrb({ size, color, layers = 7, style }) {
-  const rings = [];
-  for (let i = 0; i < layers; i += 1) {
-    const s = size * (1 - (i / layers) * 0.84);
-    rings.push(
-      <View
-        key={i}
-        style={{
-          position: 'absolute',
-          width: s,
-          height: s,
-          borderRadius: s / 2,
-          backgroundColor: color,
-        }}
-      />
-    );
-  }
-  return (
-    <View
-      pointerEvents="none"
-      style={[
-        { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
-        style,
-      ]}
-    >
-      {rings}
-    </View>
-  );
-}
-
 export function AmbientBackground({ children, style }) {
   return (
     <View style={[styles.ambientRoot, style]}>
+      {/* Soft light. Full-screen gradient washes only — discrete shapes
+          (circles, stacked rings) band visibly on the device panel. */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <LinearGradient
           colors={['#FFFFFF', colors.bg, colors.accentSoft]}
-          locations={[0, 0.52, 1]}
+          locations={[0, 0.5, 1]}
           style={StyleSheet.absoluteFill}
         />
-        <SoftOrb
-          size={440}
-          color="rgba(122, 18, 48, 0.040)"
-          style={{ position: 'absolute', top: -170, right: -150 }}
+        <LinearGradient
+          colors={['rgba(122, 18, 48, 0.10)', 'rgba(122, 18, 48, 0.025)', 'rgba(122, 18, 48, 0)']}
+          locations={[0, 0.42, 1]}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0.05, y: 0.62 }}
+          style={StyleSheet.absoluteFill}
         />
-        <SoftOrb
-          size={380}
-          color="rgba(122, 18, 48, 0.030)"
-          style={{ position: 'absolute', bottom: -140, left: -140 }}
+        <LinearGradient
+          colors={['rgba(122, 18, 48, 0)', 'rgba(122, 18, 48, 0.07)']}
+          locations={[0.45, 1]}
+          start={{ x: 0, y: 0.4 }}
+          end={{ x: 0.75, y: 1 }}
+          style={StyleSheet.absoluteFill}
         />
-        <SoftOrb
-          size={300}
-          color="rgba(255, 255, 255, 0.55)"
-          style={{ position: 'absolute', top: '36%', left: -110 }}
-        />
-        <SoftOrb
-          size={260}
-          color="rgba(255, 255, 255, 0.45)"
-          style={{ position: 'absolute', top: '62%', right: -90 }}
+        <LinearGradient
+          colors={['rgba(255, 255, 255, 0.55)', 'rgba(255, 255, 255, 0)']}
+          start={{ x: 0, y: 0.18 }}
+          end={{ x: 0.9, y: 0.7 }}
+          style={StyleSheet.absoluteFill}
         />
       </View>
       {children}
@@ -115,60 +84,43 @@ export function AmbientBackground({ children, style }) {
 /* Surfaces                                                            */
 /* ------------------------------------------------------------------ */
 
-function SheenLayer({ colors: sheenColors, r, highlight = true }) {
-  return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: r }]}>
-      <LinearGradient
-        colors={sheenColors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0.85, y: 1 }}
-        style={[StyleSheet.absoluteFill, { borderRadius: r }]}
-      />
-      {highlight ? (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: Math.min(r, 16),
-            right: Math.min(r, 16),
-            height: StyleSheet.hairlineWidth * 2,
-            backgroundColor: glass.strokeInner,
-            opacity: 0.85,
-          }}
-        />
-      ) : null}
-    </View>
-  );
-}
-
+// The sheen is painted by the surface itself rather than by an absolutely
+// positioned overlay: Yoga insets absolute children by the parent's padding,
+// so an overlay on a padded panel lands as a hard-edged rectangle over the
+// content box instead of covering the whole card.
 export function GlassSurface({
   tone = 'light',
   radius: r = radius.glass,
   shadow = 'base',
   sheen = true,
-  highlight = true,
-  clip = false,
+  clip = true,
   style,
   children,
 }) {
   const spec = TONES[tone] || TONES.light;
+  const base = [
+    {
+      borderRadius: r,
+      backgroundColor: spec.bg,
+      borderWidth: 1,
+      borderColor: spec.border,
+    },
+    clip && { overflow: 'hidden' },
+    SHADOWS[shadow],
+    style,
+  ];
+
+  if (!sheen) return <View style={base}>{children}</View>;
+
   return (
-    <View
-      style={[
-        {
-          borderRadius: r,
-          backgroundColor: spec.bg,
-          borderWidth: 1,
-          borderColor: spec.border,
-        },
-        clip && { overflow: 'hidden' },
-        SHADOWS[shadow],
-        style,
-      ]}
+    <LinearGradient
+      colors={spec.sheen}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={base}
     >
-      {sheen ? <SheenLayer colors={spec.sheen} r={r} highlight={highlight} /> : null}
       {children}
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -179,7 +131,6 @@ export function BlurSurface({
   radius: r = 0,
   style,
   children,
-  sheen = false,
 }) {
   const spec = TONES[tone] || TONES.soft;
   return (
@@ -195,7 +146,6 @@ export function BlurSurface({
         pointerEvents="none"
         style={[StyleSheet.absoluteFill, { backgroundColor: spec.bg }]}
       />
-      {sheen ? <SheenLayer colors={spec.sheen} r={r} highlight={false} /> : null}
       {children}
     </View>
   );
@@ -286,7 +236,10 @@ export function GlassButton({
         disabled={isDisabled}
       >
         {variant === 'primary' ? (
-          <View
+          <LinearGradient
+            colors={['rgba(255,255,255,0.30)', 'rgba(255,255,255,0.05)', 'rgba(0,0,0,0.12)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.4, y: 1 }}
             style={[
               styles.btnBase,
               pad,
@@ -295,26 +248,8 @@ export function GlassButton({
               isDisabled && styles.btnDisabled,
             ]}
           >
-            <LinearGradient
-              colors={['rgba(255,255,255,0.34)', 'rgba(255,255,255,0.06)', 'rgba(0,0,0,0.10)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0.4, y: 1 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: radius.pill }]}
-              pointerEvents="none"
-            />
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: 1,
-                left: 22,
-                right: 22,
-                height: StyleSheet.hairlineWidth * 2,
-                backgroundColor: 'rgba(255,255,255,0.5)',
-              }}
-            />
             {body}
-          </View>
+          </LinearGradient>
         ) : (
           <GlassSurface
             tone={variant === 'danger' ? 'danger' : variant === 'ghost' ? 'hollow' : 'strong'}
