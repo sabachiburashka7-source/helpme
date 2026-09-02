@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import MapPicker from '../components/MapPicker';
 import {
-  AmbientBackground, BlurSurface, GlassSurface, GlassPanel, GlassChip,
+  AmbientBackground, BlurSurface, GlassSurface, GlassChip, PhotoScrim,
   GlassButton, PressableGlass, usePressScale,
 } from '../components/Glass';
 
@@ -437,6 +437,9 @@ function OfferCard({ offer, onPress }) {
             placeholderText={offer.category}
             style={styles.cardImage}
           >
+            {/* Wash the foot of the illustration so the text panel below
+                always has a calm backdrop, whatever the image looks like. */}
+            <PhotoScrim height={148} />
             {offer.generatingImage && !offer.image ? (
               <GlassSurface tone="strong" radius={radius.pill} shadow="subtle" style={styles.imageLoadingBadge}>
                 <View style={styles.spinDot} />
@@ -454,12 +457,11 @@ function OfferCard({ offer, onPress }) {
           </GlassSurface>
         </View>
 
-        <GlassPanel
-          tone="strong"
+        <GlassSurface
+          tone="read"
           radius={26}
-          intensity={48}
+          shadow="subtle"
           style={styles.cardPanel}
-          contentStyle={styles.cardPanelInner}
         >
           <Text style={styles.desc} numberOfLines={2}>{offer.description}</Text>
           <View style={styles.cardBottomRow}>
@@ -469,7 +471,7 @@ function OfferCard({ offer, onPress }) {
               <Text style={styles.cardLoc} numberOfLines={1}>{displayLocation}</Text>
             </View>
           </View>
-        </GlassPanel>
+        </GlassSurface>
       </View>
     </PressableGlass>
   );
@@ -544,10 +546,12 @@ function DetailsModal({ offer, onClose }) {
                 resizeMode="cover"
                 placeholderText={data.category}
                 style={styles.modalImage}
-              />
+              >
+                <PhotoScrim height={96} />
+              </BgImage>
 
               <View style={styles.modalBody}>
-                <GlassSurface tone="strong" radius={24} shadow="subtle" style={styles.modalHeaderCard}>
+                <GlassSurface tone="read" radius={24} shadow="subtle" style={styles.modalHeaderCard}>
                   <View style={styles.modalHeaderRow}>
                     <View style={styles.avatar}>
                       {isImageUrl(data.profile_image) ? (
@@ -780,14 +784,16 @@ const styles = StyleSheet.create({
   },
   imageLoadingText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
 
-  // Sits almost entirely on the photo: the blurred image showing through is
-  // the whole point — that is what reads as glass.
+  // Sits almost entirely on the photo. This used to be a real `BlurView`,
+  // but a BlurView inside a ScrollView is exactly the case Android's
+  // dimezisBlurView handles badly — it often did not render at all, leaving
+  // body text over 62% white and a raw illustration. `read` tone + the
+  // PhotoScrim above give the same floating-glass look, legibly, and cost
+  // nothing to scroll.
   cardPanel: {
     marginTop: -104,
     marginHorizontal: 12,
     marginBottom: 12,
-  },
-  cardPanelInner: {
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 14,
@@ -815,7 +821,8 @@ const styles = StyleSheet.create({
   },
   cardLoc: {
     fontSize: 12,
-    color: colors.textTertiary,
+    color: colors.textSecondary,
+    fontWeight: '500',
     flexShrink: 1,
   },
 

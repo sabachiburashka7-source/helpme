@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import ProfileScreen from './ProfileScreen';
 import {
-  AmbientBackground, GlassSurface, GlassPanel, GlassField, GlassButton,
+  AmbientBackground, GlassSurface, GlassPanel, GlassField, GlassButton, PhotoScrim,
   GlassSegmented, GlassChip, PressableGlass,
 } from '../components/Glass';
 
@@ -507,7 +507,10 @@ function MyOfferCard({ offer, onRemove }) {
       {hasVisual ? (
         <View style={styles.myCardImageFrame}>
           {offer.image ? (
-            <BgImage source={offer.image} resizeMode="cover" style={styles.myCardImage} />
+            <BgImage source={offer.image} resizeMode="cover" style={styles.myCardImage}>
+              {/* Calm backdrop for the text panel that overlaps the photo. */}
+              <PhotoScrim height={148} />
+            </BgImage>
           ) : (
             <View style={styles.myCardImagePlaceholder}>
               <View style={styles.spinDot} />
@@ -517,13 +520,11 @@ function MyOfferCard({ offer, onRemove }) {
         </View>
       ) : null}
 
-      <GlassPanel
-        tone="strong"
+      <GlassSurface
+        tone="read"
         radius={28}
-        intensity={48}
-        blur={hasVisual}
+        shadow="subtle"
         style={[styles.myCardPanel, hasVisual && styles.myCardPanelOverlap]}
-        contentStyle={styles.myCardPanelInner}
       >
         <View style={styles.myCardTop}>
           <GlassSurface tone="accent" radius={radius.pill} shadow="none" style={styles.priceChip}>
@@ -554,7 +555,7 @@ function MyOfferCard({ offer, onRemove }) {
             ))}
           </View>
         ) : null}
-      </GlassPanel>
+      </GlassSurface>
     </View>
   );
 }
@@ -758,8 +759,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     fontWeight: '600',
   },
-  myCardPanel: {},
-  myCardPanelInner: {
+  // No BlurView here: this card lives in a ScrollView, where Android's
+  // dimezisBlurView is unreliable — it frequently did not render, leaving
+  // the description over a raw illustration. `read` tone + PhotoScrim.
+  myCardPanel: {
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 16,

@@ -25,6 +25,8 @@ import { colors, glass, radius, shadows } from './theme';
 const TONES = {
   light: { bg: glass.fill, border: glass.stroke },
   strong: { bg: glass.fillStrong, border: glass.stroke },
+  // Use for any panel with body text sitting over a photo.
+  read: { bg: glass.fillRead, border: glass.stroke },
   soft: { bg: glass.fillSoft, border: glass.strokeSoft },
   hollow: { bg: glass.fillHollow, border: glass.strokeSoft },
   accent: { bg: glass.accentFill, border: glass.accentStroke },
@@ -76,6 +78,30 @@ export function AmbientBackground({ children, style }) {
       </View>
       {children}
     </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Photo scrim                                                         */
+/* ------------------------------------------------------------------ */
+
+// A bottom-aligned white wash for the foot of a photo. Drop it inside the
+// image frame (as a child of `BgImage`, or as a sibling above the image)
+// wherever a glass panel overlaps a picture. Without it the panel inherits
+// whatever the illustration happened to contain — often dark and busy —
+// and the text on the panel becomes unreadable. With it, the panel always
+// has a calm near-white backdrop, and the photo still ghosts through.
+export function PhotoScrim({ height = '52%', style }) {
+  return (
+    <LinearGradient
+      pointerEvents="none"
+      colors={glass.photoScrim}
+      locations={glass.photoScrimLocations}
+      style={[
+        { position: 'absolute', left: 0, right: 0, bottom: 0, height },
+        style,
+      ]}
+    />
   );
 }
 

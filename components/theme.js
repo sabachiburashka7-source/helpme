@@ -9,8 +9,10 @@ export const colors = {
 
   text: '#0A0A0A',
   textSecondary: '#52525B',
-  textTertiary: '#A1A1AA',
-  textMuted: '#D4D4D8',
+  // Was #A1A1AA (zinc-400) — only 2.3:1 on white, and worse on a glass panel.
+  // One step down the same zinc ramp; no new hue, just legible.
+  textTertiary: '#71717A',
+  textMuted: '#A1A1AA',
 
   accent: '#7A1230',
   accentHover: '#5A0E25',
@@ -36,6 +38,12 @@ export const glass = {
   // over a photo use `fillStrong`; decorative panels use `fill`.
   fill: 'rgba(255, 255, 255, 0.44)',
   fillStrong: 'rgba(255, 255, 255, 0.62)',
+  // Panels that carry *body text over a photo*. `fillStrong` is not enough:
+  // an AI-generated illustration can be dark, busy, or high-contrast, and
+  // black text over 62% white plus arbitrary photo detail is unreadable.
+  // Paired with `photoScrim` on the image behind it, this leaves a soft
+  // ghost of the picture showing through while the text stays crisp.
+  fillRead: 'rgba(255, 255, 255, 0.72)',
   fillSoft: 'rgba(255, 255, 255, 0.26)',
   fillHollow: 'rgba(255, 255, 255, 0.12)',
 
@@ -78,6 +86,17 @@ export const glass = {
   sheenDarkLocations: [0, 0.08, 1],
 
   scrim: 'rgba(10, 10, 18, 0.45)',
+
+  // Washes the bottom of a photo to near-white so a glass panel laid over
+  // it has a calm, predictable backdrop instead of whatever the image
+  // happened to contain. Draw it bottom-aligned over the image, then put
+  // the `read`-tone panel on top.
+  photoScrim: [
+    'rgba(255, 255, 255, 0)',
+    'rgba(255, 255, 255, 0.30)',
+    'rgba(255, 255, 255, 0.62)',
+  ],
+  photoScrimLocations: [0, 0.42, 1],
 };
 
 export const radius = {
