@@ -1,5 +1,10 @@
 # helpme — Project Guide
 
+> **This file exists in two places and they must stay identical:**
+> `1$/CLAUDE.md` (loads automatically, sits beside the app folder) and
+> `helpme/CLAUDE.md` (travels with the git repo). They drifted apart once
+> already. Edit one, copy it over the other, commit both.
+
 ## What this project is
 
 A **native Android app** (Expo SDK 54 + React Native 0.81 + Hermes)
@@ -20,6 +25,15 @@ targeting Google Play Store. Cloudflare Workers host the backend API only.
 
 If a previous conversation built web stuff, treat it as a regression
 and strip it the way this conversation did (commit `99e3890` and later).
+
+**Cloudflare is the only host.** The owner confirmed on 2026-09-02 that
+everything now runs on Cloudflare. Do NOT:
+
+- Restore Vercel in any form — `vercel.json`, the handlers in
+  `helpme/api/`, `@vercel/*` packages, or a Vercel deploy step.
+- Restore Supabase in any form — clients, keys, or `helpme/supabase/`.
+- Reach for Render, Netlify, Heroku, Railway or Fly.io. The backend has
+  never been on any of them.
 
 App folder: `helpme/`
 
@@ -123,7 +137,7 @@ which is just those same colors at low alpha.
 |---|---|
 | `AmbientBackground` | Root of every screen. White -> `bg` -> `accentSoft` gradient plus soft accent orbs. Without it, glass has nothing to show through and just looks grey. |
 | `GlassSurface` | The default panel: translucent fill + bright rim + diagonal sheen. **No native blur**, so it is safe inside scrolling lists. Cards, fields, chips, modal sheets. |
-| `BlurSurface` | Real `expo-blur` frosted glass. **Fixed chrome only** — the tab bar and the Browse header. |
+| `BlurSurface` | Fixed chrome — the tab bar and the Browse header. Despite the name it does **not** blur any more (expo-blur crashes on attach); it is an opaque `chrome`-tone pane. |
 | `GlassButton` / `GlassIconButton` | Buttons. `primary` = solid accent with a light sheen; also `glass`, `ghost`, `danger`. |
 | `GlassField` | Labelled text input with a focus ring. |
 | `GlassSegmented` | Pill tab switcher with a sliding glass thumb. |
@@ -131,10 +145,21 @@ which is just those same colors at low alpha.
 
 ### Rules
 
-- **Never put a `BlurView` inside a `ScrollView` or a `Modal`.** Android
-  blur is the experimental `dimezisBlurView` path: expensive while
-  scrolling and it misrenders inside modals. `GlassSurface` is the
-  no-blur fallback and looks nearly identical over the ambient background.
+- **Never mount a `BlurView` at all.** See "NO NATIVE BLUR" under
+  critical native pitfalls — it crashes the app on launch. `GlassSurface`
+  is the no-blur surface and looks nearly identical over the ambient
+  background.
+- **Body text over a photo needs `tone="read"` + `<PhotoScrim />`.**
+  `strong` (62% white) is NOT enough over an AI-generated illustration,
+  which can be dark, busy, or high-contrast. The pattern is: `PhotoScrim`
+  as a child of the `BgImage` (washes the foot of the picture to near
+  white), then a `GlassSurface tone="read"` (72% white) laid over it. The
+  photo still ghosts through at ~17%, so it still reads as glass, but
+  text lands at 13:1 contrast even over a black image. Do not downgrade
+  those cards back to `strong` or to a blurred panel.
+- **Don't use `colors.textTertiary` for anything on a glass panel over a
+  photo** — use `textSecondary`. `textTertiary` is a caption grey for
+  panels over the ambient background only.
 - **Don't reintroduce solid `backgroundColor: colors.surface` panels.**
   If a new panel needs a background, use `GlassSurface`.
 - **The bottom tab bar is `position: 'absolute'` and fully transparent**
@@ -159,6 +184,30 @@ which is just those same colors at low alpha.
   rebuilt after they were added.
 
 ## Critical native pitfalls
+
+### 0. NO NATIVE BLUR — `expo-blur` crashes the app on launch
+
+`expo-blur` 15.0.8's `ExpoBlurView.onAttachedToWindow` calls
+`configureBlurView()`, which dereferences `appContext.throwingActivity`
+with **no null check**. When that reference is unavailable on attach, the
+module throws `MissingActivity` on the main thread and the process dies
+before drawing a frame. Reproduced 3/3 on a cold start on the user's
+Galaxy S24 Ultra (Android 16), found in v1.0.2 and fixed in `6d20336`.
+
+The throw happens on *attach*, before any blur prop is read, so
+`experimentalBlurMethod`, `intensity` and `blurReductionFactor` cannot
+avoid it. **The view simply must not be mounted.**
+
+- `BlurSurface` and `GlassPanel` no longer render a `BlurView`. They keep
+  accepting `blur` / `intensity` props and ignore them, so old call sites
+  stay valid.
+- Fixed chrome (tab bar, Browse header) uses the `chrome` tone
+  (`glass.fillChrome`, 88% white). With no blur, that fill is the only
+  thing stopping cards scrolling underneath from reading through the bar
+  — do not thin it out.
+- Before ever reintroducing blur: upgrade `expo-blur`, then confirm
+  `configureBlurView` guards the activity, then cold-start on a real
+  device.
 
 ### 1. `newArchEnabled: true` crashes with `PlatformConstants` invariant
 We set **`newArchEnabled: false`** in both `app.json` and
@@ -206,6 +255,25 @@ errors back via `ReactNativeWebView.postMessage` so the React side can
 show an overlay. Preserve this debugging.
 
 ## Cloudflare backend (API only)
+
+### Hosting history — read this before "fixing" the host
+
+The backend has only ever lived in two places:
+
+| When | Host | Address |
+|---|---|---|
+| Now | **Cloudflare Workers + D1 + KV** | `https://helpme-api.semolina.workers.dev` |
+| Before 2026-08-31 | Vercel + Supabase (dead) | `https://helpme-jade-tau.vercel.app` |
+
+It has **never** been on Render, Netlify, Heroku, Railway or Fly.io. If a
+conversation refers to "the old host", that means **Vercel** — Render is a
+misremembering and there is no Render config anywhere in this repo.
+
+Dead weight still on disk from the Vercel era, kept only as a rollback
+reference: `helpme/vercel.json` and the six handlers in `helpme/api/`.
+Nothing deploys them. They are the likeliest source of confusion about
+which host is live — delete them once the Cloudflare setup has been
+stable through a Play Store release.
 
 Migrated off Vercel + Supabase on 2026-08-31. Reason: the Supabase free
 project auto-paused after inactivity (its DNS stopped resolving), which
@@ -273,8 +341,11 @@ npx wrangler tail                                   # live logs
 npx wrangler d1 execute helpme-db --remote --command="SELECT COUNT(*) FROM offers;"
 ```
 
-The old Vercel handlers are still in `helpme/api/` as a rollback
-reference. They are dead code — nothing deploys them.
+`helpme/api/`, `helpme/supabase/` and `helpme/vercel.json` are dead code
+from the pre-Cloudflare era. Nothing deploys them and nothing imports
+them. The owner has confirmed Cloudflare-only hosting, so they are safe
+to delete — they survive purely because nobody has pulled the trigger.
+Do not "fix" or update anything inside them.
 
 ## Play Console automation (`tools/play/`)
 
@@ -307,8 +378,7 @@ node play.js testers get|set                       # closed-testing Google Group
 Google exposes **no API** for these — they stay manual in the console:
 creating the app entry, the content rating questionnaire, the data safety
 form, app access / ads / target-audience declarations, and anything about
-the developer account, identity checks or payments. The very first upload
-for a new app generally has to go through the console too.
+the developer account, identity checks or payments.
 
 ## Rules
 
@@ -349,11 +419,11 @@ for a new app generally has to go through the console too.
 | Subscription quota (3 free posts/month, Pro UI hidden for v1) | Done |
 | **Back up keystore + `keystore.properties` off-machine** | **TODO (user task — if lost, app can never be updated on Play Store)** |
 | Bump `expo.android.versionCode` (and matching value in `android/app/build.gradle`) before every upload after the first | Ongoing |
-| Play Console API access for Claude (`tools/play/`) | Tool built — waiting on the service-account key from the owner |
 | Play Console developer account + app entry created | Done (owner confirmed 2026-09-02) |
-| Store listing content (title, descriptions, screenshots, feature graphic) | In progress — read the live state with `node play.js listing get` and `images list` |
+| Play Console API access for Claude (`tools/play/`) | Tool built — waiting on the service-account key from the owner |
+| Store listing content (title, descriptions, screenshots, feature graphic) | Unverified — read the live state with `node play.js listing get` and `images list` |
 | Content rating questionnaire, data safety form, app access declarations | TODO (user task — no API exists, must be done in the console) |
-| Closed testing track — 12+ testers, 14 continuous days, before production rollout | TODO (user task) |
+| Closed testing track — 12+ testers, 14 continuous days | **In progress** — the app is live on the closed track as of 2026-09-02. Check progress with `node play.js status`. |
 
 ## Common debug recipes
 
