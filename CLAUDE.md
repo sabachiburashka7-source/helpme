@@ -349,6 +349,16 @@ Do not "fix" or update anything inside them.
 
 ## Play Console automation (`tools/play/`)
 
+Play Console hides these pages behind a search box that often fails to find
+them. The developer account id is **5763895807300578547** (not secret — it is
+in the URL of every console page), so link straight to them instead:
+
+| Page | Link |
+|---|---|
+| API access / service accounts | `https://play.google.com/console/u/0/developers/5763895807300578547/api-access` |
+| Users and permissions | `https://play.google.com/console/u/0/developers/5763895807300578547/users-and-permissions` |
+| All apps | `https://play.google.com/console/u/0/developers/5763895807300578547/app-list` |
+
 Claude has direct API access to Play Console through a Google Cloud
 **service account** — a robot account invited into the console. The CLI
 lives in `helpme/tools/play/` and is run by Claude, never by the user.
