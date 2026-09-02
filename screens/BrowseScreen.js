@@ -192,7 +192,7 @@ export default function BrowseScreen({ dbOffers, loading }) {
           { transform: [{ translateY: headerOffset }] },
         ]}
       >
-        <BlurSurface tone="soft" intensity={38} style={styles.headerBlur}>
+        <BlurSurface tone="chrome" style={styles.headerBlur}>
           <View style={[styles.headerInner, { paddingTop: insets.top }]}>
             <View style={styles.headerBar}>
               <View style={{ flex: 1 }}>
@@ -784,12 +784,12 @@ const styles = StyleSheet.create({
   },
   imageLoadingText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
 
-  // Sits almost entirely on the photo. This used to be a real `BlurView`,
-  // but a BlurView inside a ScrollView is exactly the case Android's
-  // dimezisBlurView handles badly — it often did not render at all, leaving
-  // body text over 62% white and a raw illustration. `read` tone + the
-  // PhotoScrim above give the same floating-glass look, legibly, and cost
-  // nothing to scroll.
+  // Sits almost entirely on the photo. This used to be a blurred panel;
+  // native blur is gone app-wide because expo-blur crashes on attach (see
+  // components/Glass.js). Even before that it left body text over 62%
+  // white and a raw illustration whenever the blur failed to render.
+  // `read` tone + the PhotoScrim above give the same floating-glass look,
+  // legibly, and cost nothing to scroll.
   cardPanel: {
     marginTop: -104,
     marginHorizontal: 12,

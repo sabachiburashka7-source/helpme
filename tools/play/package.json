@@ -1,0 +1,12 @@
+{
+  "name": "kheli-play-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Google Play Console automation for Kheli (com.sabachiburashka.helpme). Run by Claude, not by hand.",
+  "main": "play.js",
+  "scripts": {
+    "doctor": "node play.js doctor",
+    "status": "node play.js status"
+  },
+  "license": "UNLICENSED"
+}

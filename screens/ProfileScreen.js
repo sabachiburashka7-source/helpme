@@ -143,7 +143,6 @@ export default function ProfileScreen({
             <GlassPanel
               tone="light"
               radius={32}
-              blur={false}
               style={styles.identityCard}
               contentStyle={styles.identityCardInner}
             >

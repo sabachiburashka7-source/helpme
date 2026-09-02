@@ -5,11 +5,21 @@
 //  * `GlassSurface` — translucent fill + bright rim + diagonal sheen. No
 //    native blur, so it is safe to use hundreds of times inside a
 //    ScrollView. This is the default for cards, fields, chips.
-//  * `BlurSurface` — the same look, but backed by a real `BlurView`.
-//    Android's blur is the experimental `dimezisBlurView` implementation
-//    and gets expensive when it is scrolled or nested, so keep it for
-//    *fixed chrome only* (tab bar, floating header) and never inside a
-//    `Modal` — it misbehaves there.
+//  * `BlurSurface` — fixed chrome (tab bar, floating header). It used to
+//    be backed by a real `BlurView`; it is NOT any more. See below.
+//
+// NO NATIVE BLUR ANYWHERE IN THIS APP.
+//
+// expo-blur 15.0.8's `ExpoBlurView.onAttachedToWindow` calls
+// `configureBlurView()`, which dereferences `appContext.throwingActivity`
+// with no null check. When the activity reference is not available at
+// that moment the module throws `MissingActivity` on the main thread and
+// the whole app dies before it draws a frame. It reproduced 3/3 on a cold
+// start on a Galaxy S24 Ultra. The throw happens on *attach*, before any
+// blur setting is read, so `experimentalBlurMethod`/`intensity` cannot
+// avoid it — the only fix is to never mount the view. If you are tempted
+// to bring blur back, upgrade expo-blur first and check that
+// `configureBlurView` guards the activity.
 //
 // Both read through to `AmbientBackground`, which is what gives the glass
 // something worth showing through.
@@ -18,7 +28,6 @@ import React, { useRef } from 'react';
 import {
   View, Text, StyleSheet, Pressable, Animated, TextInput,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, glass, radius, shadows } from './theme';
 
@@ -29,6 +38,8 @@ const TONES = {
   read: { bg: glass.fillRead, border: glass.stroke },
   soft: { bg: glass.fillSoft, border: glass.strokeSoft },
   hollow: { bg: glass.fillHollow, border: glass.strokeSoft },
+  // Fixed chrome laid over scrolling content — see `fillChrome`.
+  chrome: { bg: glass.fillChrome, border: glass.stroke },
   accent: { bg: glass.accentFill, border: glass.accentStroke },
   dark: { bg: glass.darkFill, border: glass.darkStroke, dark: true },
   darkStrong: { bg: glass.darkFillStrong, border: glass.darkStroke, dark: true },
@@ -151,21 +162,21 @@ export function GlassSurface({
   );
 }
 
-// A frosted panel with a real blur behind it. Padding goes in
-// `contentStyle`, never in `style`: the blur/tint/sheen layers are
-// absolutely positioned, and Yoga insets absolute children by the
-// parent's padding, so padding on the outer view would shrink them to the
-// content box and leave a hard-edged rectangle.
+// A panel whose tint and sheen are painted as absolutely positioned
+// layers. Padding goes in `contentStyle`, never in `style`: Yoga insets
+// absolute children by the parent's padding, so padding on the outer view
+// would shrink those layers to the content box and leave a hard-edged
+// rectangle.
 //
-// Use this where something worth seeing sits behind the panel — a photo,
-// the avatar, scrolling content. Blur is what makes the glass legible AND
-// transparent at the same time. Never inside a `Modal` (Android's blur
-// misrenders there); pass `blur={false}` in that case.
+// `blur` and `intensity` are accepted and ignored — they are leftovers
+// from when this mounted a real `BlurView`, which crashed the app on
+// attach (see the note at the top of this file). Kept in the signature so
+// existing call sites stay valid.
 export function GlassPanel({
   tone = 'strong',
   radius: r = 26,
-  blur = true,
-  intensity = 42,
+  blur, // eslint-disable-line no-unused-vars -- ignored, see above
+  intensity, // eslint-disable-line no-unused-vars -- ignored, see above
   shadow = 'none',
   style,
   contentStyle,
@@ -181,15 +192,6 @@ export function GlassPanel({
         style,
       ]}
     >
-      {blur ? (
-        <BlurView
-          intensity={intensity}
-          tint="light"
-          experimentalBlurMethod="dimezisBlurView"
-          blurReductionFactor={4}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
       <View
         pointerEvents="none"
         style={[StyleSheet.absoluteFill, { backgroundColor: spec.bg }]}
@@ -207,27 +209,32 @@ export function GlassPanel({
   );
 }
 
-// Real frosted blur. Fixed chrome only — see the note at the top.
+// Fixed chrome — the tab bar and the Browse header. There is no native
+// blur behind this any more (see the note at the top of this file), so the
+// `chrome` tone is deliberately opaque: it is the only thing stopping the
+// cards that scroll underneath from reading straight through the bar.
+// `intensity` is accepted and ignored.
 export function BlurSurface({
-  tone = 'soft',
-  intensity = 30,
+  tone = 'chrome',
+  intensity, // eslint-disable-line no-unused-vars -- ignored, see above
   radius: r = 0,
   style,
   children,
 }) {
-  const spec = TONES[tone] || TONES.soft;
+  const spec = TONES[tone] || TONES.chrome;
   return (
     <View style={[{ borderRadius: r, overflow: 'hidden' }, style]}>
-      <BlurView
-        intensity={intensity}
-        tint="light"
-        experimentalBlurMethod="dimezisBlurView"
-        blurReductionFactor={4}
-        style={StyleSheet.absoluteFill}
-      />
       <View
         pointerEvents="none"
         style={[StyleSheet.absoluteFill, { backgroundColor: spec.bg }]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={glass.sheen}
+        locations={glass.sheenLocations}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={StyleSheet.absoluteFill}
       />
       {children}
     </View>

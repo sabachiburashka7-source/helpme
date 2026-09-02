@@ -253,8 +253,8 @@ function AppInner() {
         screenOptions={({ route }) => ({
           headerShown: false,
           // Frosted floating bar. The tab bar is absolutely positioned and
-          // fully transparent so screen content scrolls *under* the blur —
-          // screens pad their scroll content with `useBottomTabBarHeight()`.
+          // fully transparent so screen content scrolls *under* it — screens
+          // pad their scroll content with `useBottomTabBarHeight()`.
           // No fixed height: bottom-tabs still adds the gesture-bar inset.
           tabBarStyle: {
             position: 'absolute',
@@ -270,7 +270,7 @@ function AppInner() {
           },
           tabBarBackground: () => (
             <View style={StyleSheet.absoluteFill}>
-              <BlurSurface tone="soft" intensity={46} style={styles.tabBarGlass} />
+              <BlurSurface tone="chrome" style={styles.tabBarGlass} />
               <View pointerEvents="none" style={styles.tabBarHairline} />
             </View>
           ),

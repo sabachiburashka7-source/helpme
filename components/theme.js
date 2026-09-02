@@ -46,6 +46,12 @@ export const glass = {
   fillRead: 'rgba(255, 255, 255, 0.72)',
   fillSoft: 'rgba(255, 255, 255, 0.26)',
   fillHollow: 'rgba(255, 255, 255, 0.12)',
+  // Fixed chrome — the tab bar and the Browse header. These sit over
+  // content that scrolls underneath them, and there is no native blur to
+  // soften it (see the BlurSurface note in Glass.js), so the fill has to
+  // do that job on its own. Opaque enough that moving cards read as a
+  // faint tint shifting behind the bar, not as legible text.
+  fillChrome: 'rgba(255, 255, 255, 0.88)',
 
   // A bright rim is the strongest glass cue after transparency.
   stroke: 'rgba(255, 255, 255, 0.90)',

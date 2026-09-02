@@ -237,9 +237,8 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
             <FadeInUp>
               <View style={styles.heroOuter}>
                 <GlassPanel
-                  tone="light"
+                  tone="strong"
                   radius={32}
-                  intensity={44}
                   style={styles.hero}
                   contentStyle={styles.heroInner}
                 >
@@ -759,9 +758,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     fontWeight: '600',
   },
-  // No BlurView here: this card lives in a ScrollView, where Android's
-  // dimezisBlurView is unreliable — it frequently did not render, leaving
-  // the description over a raw illustration. `read` tone + PhotoScrim.
+  // No native blur here — it is gone app-wide (see components/Glass.js),
+  // and it left the description over a raw illustration whenever it failed
+  // to render. `read` tone + PhotoScrim instead.
   myCardPanel: {
     paddingHorizontal: 16,
     paddingTop: 14,
