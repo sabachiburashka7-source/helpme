@@ -350,7 +350,9 @@ for a new app generally has to go through the console too.
 | **Back up keystore + `keystore.properties` off-machine** | **TODO (user task — if lost, app can never be updated on Play Store)** |
 | Bump `expo.android.versionCode` (and matching value in `android/app/build.gradle`) before every upload after the first | Ongoing |
 | Play Console API access for Claude (`tools/play/`) | Tool built — waiting on the service-account key from the owner |
-| Play Console account + app listing (title, descriptions, screenshots, feature graphic, content rating, data safety form, privacy URL) | TODO (user task) |
+| Play Console developer account + app entry created | Done (owner confirmed 2026-09-02) |
+| Store listing content (title, descriptions, screenshots, feature graphic) | In progress — read the live state with `node play.js listing get` and `images list` |
+| Content rating questionnaire, data safety form, app access declarations | TODO (user task — no API exists, must be done in the console) |
 | Closed testing track — 12+ testers, 14 continuous days, before production rollout | TODO (user task) |
 
 ## Common debug recipes
