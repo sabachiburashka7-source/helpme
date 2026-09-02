@@ -276,6 +276,40 @@ npx wrangler d1 execute helpme-db --remote --command="SELECT COUNT(*) FROM offer
 The old Vercel handlers are still in `helpme/api/` as a rollback
 reference. They are dead code — nothing deploys them.
 
+## Play Console automation (`tools/play/`)
+
+Claude has direct API access to Play Console through a Google Cloud
+**service account** — a robot account invited into the console. The CLI
+lives in `helpme/tools/play/` and is run by Claude, never by the user.
+
+```bash
+cd helpme/tools/play
+node play.js doctor                                # verify access end to end
+node play.js status                                # tracks vs. local build
+node play.js upload --track internal --notes "..."
+node play.js listing get|push                      # title + descriptions
+node play.js images list|push                      # icon, feature graphic, screenshots
+node play.js reviews list|reply
+node play.js testers get|set                       # closed-testing Google Groups
+```
+
+- **The key is `tools/play/service-account.json`, gitignored twice over.**
+  Anyone holding it can publish to the live listing. Never commit it,
+  never `cat` it into a transcript, never send it anywhere.
+- Publishing to `production` and posting a public review reply both need
+  an explicit `--confirm`, on top of asking the user first.
+- Every change is staged inside a Play "edit" and only lands on commit.
+  Anything thrown abandons the edit, so a half-finished change never
+  reaches the live listing.
+- `--dry-run` on `upload`, `listing push`, `images push` and `testers set`
+  shows what would happen without sending anything.
+
+Google exposes **no API** for these — they stay manual in the console:
+creating the app entry, the content rating questionnaire, the data safety
+form, app access / ads / target-audience declarations, and anything about
+the developer account, identity checks or payments. The very first upload
+for a new app generally has to go through the console too.
+
 ## Rules
 
 - **Do NOT take preview screenshots or start dev servers to verify UI
@@ -315,6 +349,7 @@ reference. They are dead code — nothing deploys them.
 | Subscription quota (3 free posts/month, Pro UI hidden for v1) | Done |
 | **Back up keystore + `keystore.properties` off-machine** | **TODO (user task — if lost, app can never be updated on Play Store)** |
 | Bump `expo.android.versionCode` (and matching value in `android/app/build.gradle`) before every upload after the first | Ongoing |
+| Play Console API access for Claude (`tools/play/`) | Tool built — waiting on the service-account key from the owner |
 | Play Console account + app listing (title, descriptions, screenshots, feature graphic, content rating, data safety form, privacy URL) | TODO (user task) |
 | Closed testing track — 12+ testers, 14 continuous days, before production rollout | TODO (user task) |
 

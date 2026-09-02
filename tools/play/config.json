@@ -1,0 +1,7 @@
+{
+  "packageName": "com.sabachiburashka.helpme",
+  "aabPath": "../../android/app/build/outputs/bundle/release/app-release.aab",
+  "apkPath": "../../android/app/build/outputs/apk/release/app-release.apk",
+  "defaultLanguage": "en-US",
+  "keyFile": "service-account.json"
+}

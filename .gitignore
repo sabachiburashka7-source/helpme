@@ -58,3 +58,8 @@ yarn-error.*
 
 .vercel
 .env*
+
+# Play Console robot-account key — publishing credentials, never commit
+**/service-account.json
+**/service-account*.json
+tools/play/service-account.json

@@ -1,0 +1,7 @@
+# The Play Console robot-account key. NEVER commit this — anyone holding it
+# can publish releases to the real Play Store listing.
+service-account.json
+*-service-account.json
+service-account*.json
+
+node_modules/

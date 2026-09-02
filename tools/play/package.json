@@ -8,5 +8,8 @@
     "doctor": "node play.js doctor",
     "status": "node play.js status"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@googleapis/androidpublisher": "^38.0.0"
+  }
 }
