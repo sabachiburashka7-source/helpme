@@ -111,7 +111,12 @@ async function withEdit(fn, { commit = true, changesNotSentForReview = false } =
   return result;
 }
 
-/** Turn a Google API error into something worth reading. */
+/**
+ * Turn a Google API error into something worth reading. Google's own message is
+ * usually the most specific thing available, so check it before the HTTP status:
+ * a 403 that says "version code already used" is not a permissions problem, and
+ * reporting it as one sends people off fixing the wrong thing.
+ */
 function translate(err) {
   if (err instanceof PlayError) return err;
 
@@ -125,6 +130,7 @@ function translate(err) {
 
   const as = (message, hint) => new PlayError(message, hint, err);
 
+  // --- what Google actually said ---
   if (low.includes('invalid_grant') || low.includes('invalid jwt')) {
     return as(
       'Google rejected the key.',
@@ -132,35 +138,11 @@ function translate(err) {
         'Create a fresh key in Google Cloud and replace the file.'
     );
   }
-  if (status === 401) {
-    return as('Google would not let us sign in.', detail);
-  }
-  if (status === 403) {
-    if (low.includes('not been used') || low.includes('is disabled')) {
-      return as(
-        'The Play API is switched off for this Google Cloud project.',
-        'Turn on "Google Play Android Developer API" in the Google Cloud console, ' +
-          'then wait a minute and try again.'
-      );
-    }
-    return as(
-      'The robot account is not allowed to do that.',
-      'In Play Console, open Users and permissions, find the robot account, and give it ' +
-        'access to this app plus the permissions it needs (release to tracks, edit store listing).\n\n' +
-        `Google said: ${detail}`
-    );
-  }
-  if (status === 404) {
-    return as(
-      `Play Console has no app called ${config.packageName}.`,
-      'Either the app has not been created in Play Console yet, or the robot account ' +
-        'has not been given access to it. The app entry must be created by hand first.'
-    );
-  }
   if (low.includes('version code') && low.includes('already been used')) {
     return as(
-      'That version number is already taken.',
-      'Play will not accept the same version code twice. Bump versionCode in app.json ' +
+      'That build number is already on Play.',
+      'Play will not take the same build number twice. Either put the copy already ' +
+        'up there on a track with --version-code <n>, or bump versionCode in app.json ' +
         'and android/app/build.gradle, rebuild, and upload again.'
     );
   }
@@ -170,8 +152,42 @@ function translate(err) {
       'Upload the first build by hand in Play Console. After that this tool can take over.'
     );
   }
-  if (low.includes('apk') && low.includes('signed')) {
-    return as('The build is signed with the wrong key.', detail);
+  if (low.includes('signed') && (low.includes('certificate') || low.includes('key'))) {
+    return as(
+      'The build is signed with the wrong key.',
+      `Play expects the keystore this app was first signed with.
+
+Google said: ${detail}`
+    );
+  }
+  if (low.includes('not been used') || low.includes('is disabled')) {
+    return as(
+      'The Play API is switched off for this Google Cloud project.',
+      'Turn on "Google Play Android Developer API" in the Google Cloud console, ' +
+        'then wait a minute and try again.'
+    );
+  }
+
+  // --- fall back to the HTTP status ---
+  if (status === 401) {
+    return as('Google would not let us sign in.', detail);
+  }
+  if (status === 403) {
+    return as(
+      'The robot account is not allowed to do that.',
+      'In Play Console, open Users and permissions, find the robot account, and give it ' +
+        'access to this app plus the permissions it needs (release to tracks, edit store listing).' +
+        `
+
+Google said: ${detail}`
+    );
+  }
+  if (status === 404) {
+    return as(
+      `Play Console has no app called ${config.packageName}.`,
+      'Either the app has not been created in Play Console yet, or the robot account ' +
+        'has not been given access to it. The app entry must be created by hand first.'
+    );
   }
 
   return as('The Play API returned an error.', detail);

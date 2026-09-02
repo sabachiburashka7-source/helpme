@@ -49,26 +49,39 @@ async function upload(flags) {
     status = 'inProgress';
   }
 
-  const bundlePath = resolvePath(flags.file || config.aabPath);
-  if (!fs.existsSync(bundlePath)) {
-    throw new PlayError(
-      'No app bundle to upload.',
-      `Expected a release bundle at:\n  ${bundlePath}\n\nBuild one first, then try again.`
-    );
+  // A build can already be sitting on Play with no track, and Play refuses the
+  // same build twice. --version-code puts that existing copy on a track instead.
+  const reuse = flags['version-code'] === undefined ? null : Number(flags['version-code']);
+  if (reuse !== null && !Number.isInteger(reuse)) {
+    throw new PlayError('--version-code needs a whole number.', 'For example --version-code 10.');
   }
-  const size = fs.statSync(bundlePath).size;
-  const meta = appMeta();
 
-  console.log(f.heading('About to upload'));
+  const meta = appMeta();
+  let bundlePath = null;
+  let size = null;
+  if (reuse === null) {
+    bundlePath = resolvePath(flags.file || config.aabPath);
+    if (!fs.existsSync(bundlePath)) {
+      throw new PlayError(
+        'No app bundle to upload.',
+        `Expected a release bundle at:\n  ${bundlePath}\n\nBuild one first, then try again.`
+      );
+    }
+    size = fs.statSync(bundlePath).size;
+  }
+
+  console.log(f.heading(reuse === null ? 'About to upload' : 'About to release a build already on Play'));
   console.log(
     f.pairs([
       ['app', config.packageName],
-      ['bundle', `${f.bytes(size)}`],
-      ['local version', meta.version ? `${meta.version} (build ${meta.versionCode})` : 'unknown'],
+      ['bundle', size === null ? null : f.bytes(size)],
+      ['build', reuse === null ? null : String(reuse)],
+      ['local version', meta.version ? `${meta.version} (build ${meta.versionCode})` : null],
       ['track', track],
       ['release status', status + (rollout ? ` at ${Math.round(rollout * 100)}%` : '')],
     ])
   );
+  console.log(f.dim('\n  This replaces whatever releases the track holds now, drafts included.'));
 
   if (flags['dry-run']) {
     console.log(`\n${f.yellow('Dry run')} — nothing was sent to Google.`);
@@ -77,29 +90,33 @@ async function upload(flags) {
 
   const result = await withEdit(
     async ({ ap, packageName, editId }) => {
-      const { data: bundle } = await ap.edits.bundles.upload({
-        packageName,
-        editId,
-        media: { mimeType: 'application/octet-stream', body: fs.createReadStream(bundlePath) },
-      });
-      const versionCode = bundle.versionCode;
-      console.log(f.ok(`Uploaded build ${versionCode}`));
+      let versionCode = reuse;
 
-      // Crash reports are unreadable without the mapping file, so send it when
-      // the build produced one.
-      const mapping = resolvePath(MAPPING);
-      if (fs.existsSync(mapping)) {
-        try {
-          await ap.edits.deobfuscationfiles.upload({
-            packageName,
-            editId,
-            apkVersionCode: versionCode,
-            deobfuscationFileType: 'proguard',
-            media: { mimeType: 'application/octet-stream', body: fs.createReadStream(mapping) },
-          });
-          console.log(f.ok('Uploaded the crash-report mapping file'));
-        } catch {
-          console.log(f.warn('Could not upload the mapping file — crash reports may be hard to read.'));
+      if (versionCode === null) {
+        const { data: bundle } = await ap.edits.bundles.upload({
+          packageName,
+          editId,
+          media: { mimeType: 'application/octet-stream', body: fs.createReadStream(bundlePath) },
+        });
+        versionCode = bundle.versionCode;
+        console.log(f.ok(`Uploaded build ${versionCode}`));
+
+        // Crash reports are unreadable without the mapping file, so send it when
+        // the build produced one.
+        const mapping = resolvePath(MAPPING);
+        if (fs.existsSync(mapping)) {
+          try {
+            await ap.edits.deobfuscationfiles.upload({
+              packageName,
+              editId,
+              apkVersionCode: versionCode,
+              deobfuscationFileType: 'proguard',
+              media: { mimeType: 'application/octet-stream', body: fs.createReadStream(mapping) },
+            });
+            console.log(f.ok('Uploaded the crash-report mapping file'));
+          } catch {
+            console.log(f.warn('Could not upload the mapping file — crash reports may be hard to read.'));
+          }
         }
       }
 

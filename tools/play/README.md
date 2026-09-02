@@ -39,6 +39,9 @@ Options worth knowing:
 - `--status draft|completed|inProgress|halted` — defaults to `completed`
   on test tracks and `draft` on production.
 - `--rollout 0.1` — staged rollout to 10%; implies `inProgress`.
+- `--version-code <n>` — put a build that is ALREADY on Play onto a track,
+  instead of uploading. Play refuses the same build number twice, so this is
+  the way to rescue a build that was uploaded but never released.
 
 Every change is staged in a Play "edit" and only lands on commit. If anything
 throws, the edit is abandoned, so a half-finished change never reaches the
