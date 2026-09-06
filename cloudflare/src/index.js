@@ -70,17 +70,35 @@ function effectiveTier(row) {
   return new Date(row.subscription_expires_at).getTime() > Date.now() ? 'pro' : 'free';
 }
 
+// The TEST_PHONE account is shared: Google's reviewers and every paid closed
+// tester sign in as it, because none of them can receive a Georgian SMS. A
+// 3-posts-a-month cap on one shared account is spent by the first tester and
+// blocks everyone after them, so that phone posts without any quota.
+function isReviewerPhone(env, phone) {
+  const testPhone = normalizePhone(secret(env && env.TEST_PHONE));
+  if (!testPhone) return false;
+  return normalizePhone(phone) === testPhone;
+}
+
 // Shape every user response identically so the client always sees the same
-// fields (id, phone, name, profile_image, tier, subscription_expires_at).
-function shapeUser(row) {
+// fields (id, phone, name, profile_image, tier, subscription_expires_at,
+// post_limit).
+function shapeUser(row, env) {
   if (!row) return null;
+  const tier = effectiveTier(row);
   return {
     id: row.id,
     phone: row.phone,
     name: row.name,
     profile_image: row.profile_image || null,
-    tier: effectiveTier(row),
+    tier,
     subscription_expires_at: row.subscription_expires_at || null,
+    // The server owns the cap. null means "no monthly cap" (the shared
+    // reviewer / closed-tester account). Clients built before this field
+    // existed just ignore it and fall back to their own POST_QUOTA table.
+    post_limit: isReviewerPhone(env, row.phone)
+      ? null
+      : (POST_QUOTA[tier] ?? POST_QUOTA.free),
   };
 }
 
@@ -227,7 +245,7 @@ async function handleAuth(request, env) {
       .run();
     const row = await findUser(cleanPhone);
     if (!row) return json({ error: 'No account found' }, 404);
-    return json(shapeUser(row));
+    return json(shapeUser(row, env));
   }
 
   if (action === 'me') {
@@ -238,7 +256,7 @@ async function handleAuth(request, env) {
     }
     const row = await findUser(cleanPhone);
     if (!row) return json({ error: 'No account found' }, 404);
-    return json(shapeUser(row));
+    return json(shapeUser(row, env));
   }
 
   // Play Store review bypass: lets Google's reviewers (and our paid closed
@@ -272,7 +290,7 @@ async function handleAuth(request, env) {
         .run();
     } catch {}
 
-    return json(shapeUser(row));
+    return json(shapeUser(row, env));
   }
 
   if (!isE164(cleanPhone)) {
@@ -340,11 +358,11 @@ async function handleAuth(request, env) {
       // hit either flow without server-state coordination.
       const existingRow = await findUser(cleanPhone);
       if (existingRow) {
-        return json(shapeUser(existingRow));
+        return json(shapeUser(existingRow, env));
       }
       const cleanName = (typeof name === 'string' && name.trim()) || 'Play Store Reviewer';
       const created = await createUser(cleanPhone, cleanName, profile_image);
-      return json(shapeUser(created), wantsRegister ? 201 : 200);
+      return json(shapeUser(created, env), wantsRegister ? 201 : 200);
     }
 
     const checked = await twilioVerify('/VerificationCheck', {
@@ -367,13 +385,13 @@ async function handleAuth(request, env) {
         return json({ error: 'An account with this phone already exists' }, 409);
       }
       const created = await createUser(cleanPhone, cleanName, profile_image);
-      return json(shapeUser(created), 201);
+      return json(shapeUser(created, env), 201);
     }
 
     // login
     const row = await findUser(cleanPhone);
     if (!row) return json({ error: 'No account found for this number' }, 404);
-    return json(shapeUser(row));
+    return json(shapeUser(row, env));
   }
 
   return json({ error: 'Unknown action' }, 400);
@@ -405,7 +423,7 @@ async function handleOffers(request, env) {
     // of the current UTC month. Tampered clients are caught here. A missing
     // phone falls back to free tier (kept from the Vercel version so the
     // endpoint stays debuggable).
-    if (typeof phone === 'string' && phone) {
+    if (typeof phone === 'string' && phone && !isReviewerPhone(env, phone)) {
       const userRow = await db
         .prepare('SELECT tier, subscription_expires_at FROM users WHERE phone = ?')
         .bind(phone)

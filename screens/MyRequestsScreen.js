@@ -78,9 +78,16 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
   const [profileOpen, setProfileOpen] = useState(false);
 
   const tier = user?.tier === 'pro' ? 'pro' : 'free';
-  const quotaLimit = POST_QUOTA[tier];
+  // The server is the source of truth for the cap and sends it as post_limit,
+  // where null means "no cap" (the shared reviewer / closed-tester account).
+  // A server that predates the field omits it, so fall back to the table.
+  const serverLimit = user ? user.post_limit : undefined;
+  const unlimited = serverLimit === null;
+  const quotaLimit = unlimited
+    ? Infinity
+    : (typeof serverLimit === 'number' && serverLimit > 0 ? serverLimit : POST_QUOTA[tier]);
   const quotaUsed = postsThisMonthCount(myOffers);
-  const quotaRemaining = Math.max(0, quotaLimit - quotaUsed);
+  const quotaRemaining = unlimited ? Infinity : Math.max(0, quotaLimit - quotaUsed);
 
   function showPaywall() {
     Alert.alert(
@@ -289,9 +296,11 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                       style={styles.quotaPill}
                     >
                       <Text style={styles.quotaText}>
-                        {t('{used}/{limit} posts this month')
-                          .replace('{used}', String(Math.min(quotaUsed, quotaLimit)))
-                          .replace('{limit}', String(quotaLimit))}
+                        {unlimited
+                          ? t('Unlimited posts')
+                          : t('{used}/{limit} posts this month')
+                              .replace('{used}', String(Math.min(quotaUsed, quotaLimit)))
+                              .replace('{limit}', String(quotaLimit))}
                       </Text>
                     </GlassSurface>
                   </View>
