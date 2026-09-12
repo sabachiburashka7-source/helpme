@@ -433,8 +433,44 @@ the developer account, identity checks or payments.
 | Play Console API access for Claude (`tools/play/`) | Done — key installed, `node play.js doctor` passes as of 2026-09-12 |
 | Store listing content (title, descriptions, screenshots, feature graphic) | Done — verified live on 2026-09-12: title, both descriptions, icon, feature graphic, 3 phone screenshots |
 | Content rating questionnaire, data safety form, app access declarations | TODO (user task — no API exists, must be done in the console) |
-| Closed testing track — 12+ testers, 14 continuous days | Done — build 11 (`1.0.5`) ran on the closed track from 2026-09-02 |
-| **Production access granted by Google** | **BLOCKED (user task — see below). This is what stops the release, not the build.** |
+| Closed testing track — 12+ testers, 14 continuous days | Done — 18 testers; all three Google criteria show complete as of 2026-09-12 |
+| Content rating questionnaire | **TODO — the one item under "Need attention" in App content. Blocks production even after access is granted.** |
+| Data safety form, app access declarations | Done — App content shows only the content rating outstanding |
+| **Production access granted by Google** | **APPLIED 2026-09-12, 1:58 PM — under review, Google says 7 days or less. First application was REJECTED 2026-08-25.** |
+
+### Production access: rejected once, re-applied 2026-09-12
+
+**History.** The first application was rejected on **2026-08-25, 11:41 AM**:
+"We reviewed your application, and determined that your app requires more
+testing before you can access production." The likely cause is visible in
+the answers that were still saved in the form: the three *closed test*
+questions were 53, 131 and 126 characters out of 300 and said nothing
+concrete ("They liked it a lot… Everything was as i expected"). The
+*app* questions were near the limit and specific — that half was fine.
+
+Also worth knowing: the Supabase free project auto-paused mid-test and
+took the backend offline, which silently failed an earlier 14-day test.
+That is the honest reason the earlier testing looked thin, and moving to
+Cloudflare on 2026-08-31 is the fix.
+
+**Second application, submitted 2026-09-12 at 1:58 PM.** Rewrote the
+three closed-test answers, finished a truncated production-readiness
+answer, and replaced the "what did you do differently" answer. Key facts
+used, all verified: 18 opted-in testers; testers recruited through a
+**paid testing provider** (the owner confirmed this — the first
+application incorrectly said friends and family); two new builds (10 on
+09-02, 11 on 09-06) shipped after the rejection; the launch crash, the
+safe-area text, the map, and the three-post cap all fixed.
+
+Clicking **Apply** surfaces a `(5EF69F45)` "unexpected error" snackbar.
+**Ignore it** — it is a stale UI artifact. The submission succeeded;
+reloading the dashboard shows "We have your application for production
+access… Applied today, 1:58 PM."
+
+**There is no API for any of this.** It was done by driving the Play
+Console in the owner's Chrome via the browser tools. `tools/play/` cannot
+see or submit the application, and `play.js status` will keep reporting
+production as `empty` until access is granted.
 
 ### The production and open-testing tracks are locked until Google grants production access
 
