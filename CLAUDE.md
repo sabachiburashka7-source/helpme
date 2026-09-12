@@ -430,10 +430,49 @@ the developer account, identity checks or payments.
 | **Back up keystore + `keystore.properties` off-machine** | **TODO (user task — if lost, app can never be updated on Play Store)** |
 | Bump `expo.android.versionCode` (and matching value in `android/app/build.gradle`) before every upload after the first | Ongoing |
 | Play Console developer account + app entry created | Done (owner confirmed 2026-09-02) |
-| Play Console API access for Claude (`tools/play/`) | Tool built — waiting on the service-account key from the owner |
-| Store listing content (title, descriptions, screenshots, feature graphic) | Unverified — read the live state with `node play.js listing get` and `images list` |
+| Play Console API access for Claude (`tools/play/`) | Done — key installed, `node play.js doctor` passes as of 2026-09-12 |
+| Store listing content (title, descriptions, screenshots, feature graphic) | Done — verified live on 2026-09-12: title, both descriptions, icon, feature graphic, 3 phone screenshots |
 | Content rating questionnaire, data safety form, app access declarations | TODO (user task — no API exists, must be done in the console) |
-| Closed testing track — 12+ testers, 14 continuous days | **In progress** — the app is live on the closed track as of 2026-09-02. Check progress with `node play.js status`. |
+| Closed testing track — 12+ testers, 14 continuous days | Done — build 11 (`1.0.5`) ran on the closed track from 2026-09-02 |
+| **Production access granted by Google** | **BLOCKED (user task — see below). This is what stops the release, not the build.** |
+
+### The production and open-testing tracks are locked until Google grants production access
+
+Verified against the live API on 2026-09-12. Pushing a release to
+`production` or `beta` returns `400 FAILED_PRECONDITION` with Google's
+useless generic body:
+
+```json
+{ "error": { "code": 400, "message": "Precondition check failed.",
+             "status": "FAILED_PRECONDITION" } }
+```
+
+The same release to `alpha` or `internal` succeeds. That split — both
+public-facing tracks refused, both invite-only tracks fine — is the
+signature of a **personal developer account that has finished closed
+testing but has not yet been granted production access**. It is not a
+permissions problem, not a bad build, and not a signing problem; do not
+send anyone off fixing those.
+
+Finishing the 14 days does **not** unlock production by itself. The owner
+must submit the *Apply for production access* form in Play Console and
+wait for Google to review it (typically a few days, occasionally longer).
+**Google exposes no API for that form** — `tools/play/` cannot do it, and
+neither can Claude. It is console-only, like the content rating and data
+safety forms.
+
+Once Google approves, nothing needs rebuilding. Build 11 is already
+uploaded; promote the existing copy without touching the bundle:
+
+```bash
+cd helpme/tools/play
+node play.js upload --track production --version-code 11 --status completed --confirm \
+  --notes "Kheli is here. Post what you need doing, set your price, and get help from people nearby."
+```
+
+Re-run that same command to test whether access has been granted yet — it
+fails safely. Every change is staged in a Play "edit" that is abandoned on
+any error, so a refused attempt changes nothing on the live listing.
 
 ## Common debug recipes
 
