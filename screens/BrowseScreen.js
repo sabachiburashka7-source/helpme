@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, Modal, Animated, Easing,
-  StyleSheet, Linking, TextInput, Pressable,
+  StyleSheet, Linking, TextInput, Pressable, Alert,
 } from 'react-native';
+import { REPORT_REASONS } from '../components/moderation';
 import { colors, glass, radius, typography } from '../components/theme';
 import FadeInUp from '../components/FadeInUp';
 import { useTranslation } from '../components/i18n';
@@ -72,7 +73,7 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-export default function BrowseScreen({ dbOffers, loading }) {
+export default function BrowseScreen({ dbOffers, loading, user, onReportOffer, onBlockUser }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
@@ -226,7 +227,13 @@ export default function BrowseScreen({ dbOffers, loading }) {
         </BlurSurface>
       </Animated.View>
 
-      <DetailsModal offer={selected} onClose={() => setSelected(null)} />
+      <DetailsModal
+        offer={selected}
+        onClose={() => setSelected(null)}
+        user={user}
+        onReportOffer={onReportOffer}
+        onBlockUser={onBlockUser}
+      />
     </AmbientBackground>
   );
 }
@@ -499,12 +506,320 @@ function OfferMap({ offer, t }) {
   );
 }
 
-function DetailsModal({ offer, onClose }) {
+/* ------------------------------------------------------------------ *
+ * Moderation UI
+ *
+ * Google Play's User Generated Content policy expects any app whose main
+ * content is user-posted to offer a way to flag a listing and to block
+ * the person who posted it. Both live at the foot of the detail sheet,
+ * deliberately quiet so they never compete with "Call now" — and they are
+ * not rendered at all on your own request.
+ * ------------------------------------------------------------------ */
+
+function FlagGlyph({ color }) {
+  return (
+    <View style={moderationStyles.flagWrap}>
+      <View style={[moderationStyles.flagPole, { backgroundColor: color }]} />
+      <View style={[moderationStyles.flagCloth, { borderColor: color }]} />
+    </View>
+  );
+}
+
+function BlockGlyph({ color }) {
+  return (
+    <View style={[moderationStyles.blockRing, { borderColor: color }]}>
+      <View style={[moderationStyles.blockSlash, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+// The reason picker. A sheet rather than an Alert with seven buttons:
+// Android's alert caps out at three, and the optional detail field has
+// nowhere to live in one.
+function ReportSheet({ visible, onClose, onSubmit, onReported }) {
+  const { t } = useTranslation();
+  const [reason, setReason] = useState(null);
+  const [details, setDetails] = useState('');
+  const [sending, setSending] = useState(false);
+
+  // Fresh sheet every time it opens, so a half-finished report from last
+  // time never carries over onto a different request.
+  useEffect(() => {
+    if (visible) {
+      setReason(null);
+      setDetails('');
+      setSending(false);
+    }
+  }, [visible]);
+
+  async function submit() {
+    if (!reason || sending) return;
+    setSending(true);
+    const result = await onSubmit?.(reason, details.trim());
+    setSending(false);
+    if (!result?.ok) {
+      Alert.alert(t('Something went wrong'), result?.error || t('Network error. Try again.'));
+      return;
+    }
+    // Close the sheet *and* the request behind it: we are about to promise
+    // this request is hidden, so leaving it on screen would contradict that.
+    onClose?.();
+    onReported?.();
+    Alert.alert(t('Thanks for telling us'), t('We will review this request. It is hidden from you from now on.'));
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={moderationStyles.sheetBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <GlassSurface tone="light" radius={32} shadow="lifted" clip style={moderationStyles.sheetCard}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={moderationStyles.sheetContent}
+          >
+            <Text style={moderationStyles.sheetTitle}>{t('Report this request')}</Text>
+            <Text style={moderationStyles.sheetSub}>
+              {t('Tell us what is wrong with it. Reports are anonymous.')}
+            </Text>
+
+            <View style={moderationStyles.reasonList}>
+              {REPORT_REASONS.map((r, i) => {
+                const active = reason === r.key;
+                return (
+                  <React.Fragment key={r.key}>
+                    {i > 0 ? <View style={moderationStyles.reasonDivider} /> : null}
+                    <Pressable onPress={() => setReason(r.key)} style={moderationStyles.reasonRow}>
+                      <Text
+                        style={[
+                          moderationStyles.reasonText,
+                          active && moderationStyles.reasonTextActive,
+                        ]}
+                      >
+                        {t(r.label)}
+                      </Text>
+                      <View
+                        style={[
+                          moderationStyles.radio,
+                          active && moderationStyles.radioActive,
+                        ]}
+                      >
+                        {active ? <View style={moderationStyles.radioDot} /> : null}
+                      </View>
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+
+            <GlassSurface tone="soft" radius={radius.lg} shadow="none" style={moderationStyles.detailsWrap}>
+              <TextInput
+                style={moderationStyles.detailsInput}
+                placeholder={t('Anything else we should know? (optional)')}
+                placeholderTextColor={colors.textTertiary}
+                value={details}
+                onChangeText={setDetails}
+                multiline
+                maxLength={500}
+                textAlignVertical="top"
+              />
+            </GlassSurface>
+
+            <View style={{ height: 16 }} />
+            <GlassButton
+              title={t('Send report')}
+              size="lg"
+              onPress={submit}
+              loading={sending}
+              disabled={!reason}
+              style={{ alignSelf: 'stretch' }}
+            />
+            <View style={{ height: 8 }} />
+            <GlassButton
+              title={t('Cancel')}
+              variant="ghost"
+              size="md"
+              onPress={onClose}
+              style={{ alignSelf: 'stretch' }}
+            />
+          </ScrollView>
+        </GlassSurface>
+      </View>
+    </Modal>
+  );
+}
+
+function ModerationFooter({ onReport, onBlock }) {
+  const { t } = useTranslation();
+  return (
+    <View style={moderationStyles.footer}>
+      <Pressable onPress={onReport} style={moderationStyles.footerBtn} hitSlop={8}>
+        <FlagGlyph color={colors.textSecondary} />
+        <Text style={moderationStyles.footerText}>{t('Report')}</Text>
+      </Pressable>
+      <View style={moderationStyles.footerSep} />
+      <Pressable onPress={onBlock} style={moderationStyles.footerBtn} hitSlop={8}>
+        <BlockGlyph color={colors.textSecondary} />
+        <Text style={moderationStyles.footerText}>{t('Block this person')}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const moderationStyles = StyleSheet.create({
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: glass.strokeSoft,
+  },
+  footerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  footerSep: {
+    width: 1,
+    height: 14,
+    backgroundColor: glass.stroke,
+  },
+  footerText: {
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    fontWeight: '700',
+    marginLeft: 7,
+  },
+
+  flagWrap: { width: 13, height: 13 },
+  flagPole: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 1.8,
+    height: 13,
+    borderRadius: 1,
+  },
+  flagCloth: {
+    position: 'absolute',
+    left: 2.6,
+    top: 0.5,
+    width: 9,
+    height: 7,
+    borderWidth: 1.6,
+    borderRadius: 1.5,
+  },
+  blockRing: {
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    borderWidth: 1.6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blockSlash: {
+    width: 11,
+    height: 1.6,
+    borderRadius: 1,
+    transform: [{ rotate: '-45deg' }],
+  },
+
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: glass.scrim,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+  },
+  sheetCard: {
+    width: '100%',
+    maxWidth: 380,
+    maxHeight: '86%',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+  },
+  sheetContent: { padding: 22 },
+  sheetTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  sheetSub: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+    marginTop: 6,
+    marginBottom: 18,
+  },
+
+  reasonList: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: glass.stroke,
+    backgroundColor: glass.fillSoft,
+    overflow: 'hidden',
+  },
+  reasonDivider: {
+    height: 1,
+    backgroundColor: glass.strokeSoft,
+    marginLeft: 16,
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  reasonText: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '600',
+    flexShrink: 1,
+    paddingRight: 12,
+  },
+  reasonTextActive: { fontWeight: '800' },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: glass.stroke,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioActive: { borderColor: colors.accent },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.accent,
+  },
+
+  detailsWrap: {
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  detailsInput: {
+    minHeight: 72,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+    padding: 0,
+  },
+});
+
+function DetailsModal({ offer, onClose, user, onReportOffer, onBlockUser }) {
   const { t } = useTranslation();
   const open = !!offer;
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.94)).current;
   const [renderOffer, setRenderOffer] = useState(offer);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     if (open) setRenderOffer(offer);
@@ -528,6 +843,36 @@ function DetailsModal({ offer, onClose }) {
 
   const data = offer || renderOffer;
   const displayLocation = useDisplayLocation(data);
+
+  // You cannot report or block yourself, so the footer is only for other
+  // people's requests. Falls back to hiding the actions if we somehow have
+  // no signed-in user rather than firing calls that would 400.
+  const isOwnOffer = !!(user?.phone && data?.phone && user.phone === data.phone);
+  const canModerate = !!(user?.phone && data?.phone) && !isOwnOffer;
+
+  function handleBlock() {
+    const who = data.name || t('this person');
+    Alert.alert(
+      t('Block {name}?').replace('{name}', who),
+      t('You will stop seeing every request they post. You can undo this in Profile.'),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Block'),
+          style: 'destructive',
+          onPress: async () => {
+            const result = await onBlockUser?.(data.id, data.phone);
+            if (!result?.ok) {
+              Alert.alert(t('Something went wrong'), result?.error || t('Network error. Try again.'));
+              return;
+            }
+            onClose?.();
+          },
+        },
+      ]
+    );
+  }
+
   if (!renderOffer && !open) return null;
   if (!data) return null;
 
@@ -617,11 +962,25 @@ function DetailsModal({ offer, onClose }) {
                   onPress={onClose}
                   style={{ alignSelf: 'stretch' }}
                 />
+
+                {canModerate ? (
+                  <ModerationFooter
+                    onReport={() => setReportOpen(true)}
+                    onBlock={handleBlock}
+                  />
+                ) : null}
               </View>
             </ScrollView>
           </GlassSurface>
         </Animated.View>
       </Animated.View>
+
+      <ReportSheet
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        onSubmit={(reason, details) => onReportOffer?.(data.id, reason, details)}
+        onReported={onClose}
+      />
     </Modal>
   );
 }

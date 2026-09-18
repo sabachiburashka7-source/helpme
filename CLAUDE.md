@@ -124,6 +124,7 @@ If a clone reappears, also run:
 | `components/profileImage.js` | `pickProfileImage` / `pickOfferImages` via `expo-image-picker`, returning data URLs. |
 | `components/MapPicker.js` | MapLibre map inside `react-native-webview`. Used for both picking (draggable) and detail view (`draggable={false}`). No Google Maps API key needed — tiles from openfreemap. |
 | `components/BgImage.js` | `<View>` with a background image. Wraps `<Image>` absolutely under children. Use this anywhere you'd reach for CSS `backgroundImage`. |
+| `components/moderation.js` | `REPORT_REASONS` — the report reason keys. Must stay in sync with the `REPORT_REASONS` set in `cloudflare/src/index.js`, which 400s on anything else. |
 | `components/Glass.js` | Glassmorphism primitives (`AmbientBackground`, `GlassSurface`, `BlurSurface`, `GlassButton`, `GlassField`, `GlassSegmented`, `GlassChip`). See the design system section below. |
 
 ## Design system — glassmorphism (`components/Glass.js`)
@@ -289,14 +290,15 @@ neither.
     HTML (no escaping).
   - `schema.sql` — D1 tables. Safe to re-run (`IF NOT EXISTS`).
   - `wrangler.jsonc` — bindings. Secrets are deliberately NOT here.
-- **D1 database** `helpme-db` (region EEUR), binding `DB`. Tables `users`
-  and `offers`. Replaces Supabase Postgres.
+- **D1 database** `helpme-db` (region EEUR), binding `DB`. Tables `users`,
+  `offers`, `reports` and `blocks`. Replaces Supabase Postgres.
 - **KV namespace** `IMAGES`, binding `IMAGES`. Holds the generated PNGs
   and replaces Supabase Storage; they are served back by the Worker at
   `/api/image/<offer-id>.png`, so the app still just stores a URL string.
 - Routes: `/api/auth`, `/api/offers`, `/api/update-offer`,
-  `/api/generate-image`, `/api/image/<id>.png`, `/privacy`,
-  `/delete-account`, and `/health` (liveness probe).
+  `/api/generate-image`, `/api/image/<id>.png`, `/api/report`,
+  `/api/blocks`, `/privacy`, `/delete-account`, and `/health`
+  (liveness probe).
 - **Does NOT auto-deploy on push.** Deploy explicitly:
 
 ```bash
@@ -315,6 +317,46 @@ this or the app will receive the wrong shapes:
   parses it back into a real array before responding.
 - No Node built-ins: use `btoa`/`atob`, not `Buffer`. There is no
   `nodejs_compat` flag set.
+
+
+### Moderation — reports and blocks (shipped 2026-09-18, build 12)
+
+Google Play's User Generated Content policy expects an app whose content is
+mostly user-posted to offer a way to flag a listing and block its author.
+Both are keyed on **`phone`** — the identity the rest of the API already
+uses (quota counting, `delete_account`, `offers.phone`). There is no user id
+on `offers` to join against, so do not switch these to `users.id`.
+
+- `POST /api/report` — `{ offer_id, reporter_phone, reason, details? }`.
+  `reason` must be one of the `REPORT_REASONS` set in `src/index.js`, which
+  mirrors `components/moderation.js`; anything else is a 400. Reporting your
+  own offer is a 400, a missing offer is a 404. Returns
+  `{ ok, reports, hidden }`.
+- `GET|POST|DELETE /api/blocks` — list, block, unblock. POST accepts either
+  `blocked_phone` or an `offer_id` to resolve the owner from, because the app
+  only knows the listing. GET returns `[{ phone, name, created_at }]`, where
+  `name` falls back from the account to their most recent offer.
+
+**`GET /api/offers` now takes `?phone=<viewer>`** and filters four ways in one
+statement: drops authors the viewer blocked, drops offers the viewer already
+reported, drops offers past `REPORT_HIDE_THRESHOLD` (3 **distinct** reporters)
+for everyone else, and always keeps the viewer's own posts so a request never
+silently vanishes from "My requests". Those carry `hidden: true` so the owner
+gets told why. Old clients omit `?phone=` and simply skip the block filter —
+threshold hiding still applies to them.
+
+The unique index on `reports (offer_id, reporter_phone)` is what makes
+"distinct" true, so the auto-hide count is a plain `COUNT(*)`. Re-reporting
+upserts the reason instead of adding a second vote. Do not drop that index.
+
+There is still **no moderator queue** — nothing surfaces reports for a human
+to act on. Auto-hide at three reporters is the whole enforcement mechanism.
+Read what has come in with:
+
+```bash
+cd helpme/cloudflare
+npx wrangler d1 execute helpme-db --remote --command="SELECT offer_id, reason, COUNT(*) n FROM reports GROUP BY offer_id, reason ORDER BY n DESC;"
+```
 
 ### Secrets (Cloudflare dashboard -> Workers -> helpme-api -> Settings -> Variables)
 
@@ -438,6 +480,8 @@ the developer account, identity checks or payments.
 | **Production access granted by Google** | **GRANTED — confirmed on the dashboard 2026-09-18. Applied 2026-09-12; first application was REJECTED 2026-08-25.** |
 | Production country targeting | Done — Georgia only, set 2026-09-18. Console-only; the API cannot set countries for a `completed` release. |
 | **Production release submitted** | **Build 11 sent for full rollout 2026-09-18, awaiting Google review.** |
+| Report content + block user (Google Play UGC policy) | Done — build 12, 2026-09-18. Worker deployed, D1 tables live. |
+| **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 12 is live — should lower the 12+ rating.** |
 
 ### Production access: granted 2026-09-18, after one rejection
 
@@ -500,13 +544,17 @@ Resulting ratings: Google Play **12+**, ESRB **Teen**, PEGI **Parental
 guidance**, USK **16+** ("Increased Communication Risks"), ClassInd **12+**.
 Interactive elements on all of them: *Users Interact*, *Shares Location*.
 
-The age band is driven entirely by one combination: UGC is primary **and**
-the app has **no block, no report, no moderation** — verified, those
-features do not exist anywhere in `screens/`, `components/` or
-`cloudflare/src/index.js`. That is also a Google Play UGC-policy exposure,
-not just a rating cost. Adding a report-content action and a block-user
-action would likely lower the rating and close the policy gap; a new
-questionnaire can be submitted at any time afterwards.
+The age band was driven entirely by one combination: UGC is primary **and**
+the app had **no block, no report, no moderation**.
+
+**That is no longer true as of build 12 (2026-09-18).** Report and block both
+ship now — see "Moderation" under the Cloudflare section. The rating on file
+is still the old one, because IARC only re-rates when a new questionnaire is
+submitted. Once build 12 is live, go to Play Console -> App content ->
+Content ratings -> **Start new questionnaire** and answer **Yes** to "ability
+to block users or user-generated content" and **Yes** to "ability to report
+users or user-generated content"; chat moderation stays No (there is no chat).
+That should pull the age band below 12+ and it closes the UGC-policy gap.
 
 ### Release submitted 2026-09-18
 

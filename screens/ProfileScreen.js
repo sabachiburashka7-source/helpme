@@ -33,6 +33,8 @@ export default function ProfileScreen({
   onDeleteAccount,
   onCancelSubscription,
   onUpgrade,
+  blocked = [],
+  onUnblockUser,
 }) {
   const { t, lang } = useTranslation();
   if (!user) return null;
@@ -51,6 +53,29 @@ export default function ProfileScreen({
           style: 'destructive',
           onPress: async () => {
             const result = await onCancelSubscription?.();
+            if (!result?.ok) {
+              Alert.alert(
+                t('Something went wrong'),
+                result?.error || t('Network error. Try again.')
+              );
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  function handleUnblock(entry) {
+    const who = entry.name || entry.phone;
+    Alert.alert(
+      t('Unblock {name}?').replace('{name}', who),
+      t('Their requests will start showing up in Browse again.'),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        {
+          text: t('Unblock'),
+          onPress: async () => {
+            const result = await onUnblockUser?.(entry.phone);
             if (!result?.ok) {
               Alert.alert(
                 t('Something went wrong'),
@@ -214,6 +239,47 @@ export default function ProfileScreen({
               </Pressable>
             </GlassSurface>
 
+            {/* Blocked people — only shown once there is someone to list, so
+                the screen stays short for the people who never block anyone.
+                Blocking has to be undoable or it is a trapdoor, and Google
+                Play's UGC policy expects the list to be manageable in-app. */}
+            {blocked.length > 0 ? (
+              <>
+                <View style={styles.sectionLabelWrap}>
+                  <SectionLabel>{t('Blocked people')}</SectionLabel>
+                </View>
+                <GlassSurface tone="light" radius={26} shadow="base" style={styles.card}>
+                  {blocked.map((entry, i) => (
+                    <React.Fragment key={entry.phone}>
+                      {i > 0 ? <View style={styles.rowDivider} /> : null}
+                      <View style={styles.row}>
+                        <View style={styles.blockedWho}>
+                          <Text style={styles.rowText} numberOfLines={1}>
+                            {entry.name || entry.phone}
+                          </Text>
+                          {entry.name ? (
+                            <Text style={styles.blockedPhone} numberOfLines={1}>
+                              {entry.phone}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <PressableGlass onPress={() => handleUnblock(entry)} scaleTo={0.94}>
+                          <GlassSurface
+                            tone="strong"
+                            radius={radius.pill}
+                            shadow="none"
+                            style={styles.unblockBtn}
+                          >
+                            <Text style={styles.unblockText}>{t('Unblock')}</Text>
+                          </GlassSurface>
+                        </PressableGlass>
+                      </View>
+                    </React.Fragment>
+                  ))}
+                </GlassSurface>
+              </>
+            ) : null}
+
             {/* Legal — Google Play requires the privacy policy to be reachable
                 from inside the app, not only from the Play Store listing. */}
             <View style={styles.sectionLabelWrap}>
@@ -374,6 +440,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   rowTextDanger: { color: '#B53D5E' },
+
+  blockedWho: { flexShrink: 1, paddingRight: 12 },
+  blockedPhone: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 3,
+  },
+  unblockBtn: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+  },
+  unblockText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: colors.textSecondary,
+    letterSpacing: 0.2,
+  },
+
   rowChevron: {
     fontSize: 19,
     color: colors.textTertiary,

@@ -11,6 +11,9 @@
 //   DELETE /api/offers            PATCH /api/offers
 //   PATCH  /api/update-offer
 //   POST   /api/generate-image
+// Plus the moderation pair required by Google Play's UGC policy:
+//   POST   /api/report
+//   GET    /api/blocks            POST /api/blocks       DELETE /api/blocks
 //   GET    /privacy   /api/privacy
 //   GET    /delete-account  /api/delete-account
 // Plus one new route that replaces Supabase Storage:
@@ -26,6 +29,26 @@ import DELETE_ACCOUNT_HTML from './delete-account.html';
  * ------------------------------------------------------------------ */
 
 const POST_QUOTA = { free: 3, pro: 15 };
+
+// How many *distinct* people must report one offer before it drops out of
+// everyone else's Browse feed. The unique index on
+// reports (offer_id, reporter_phone) is what makes "distinct" true, so a
+// plain COUNT(*) is safe here. Three is low enough to pull something
+// genuinely bad quickly, high enough that one person with a grudge cannot
+// take a listing down on their own.
+const REPORT_HIDE_THRESHOLD = 3;
+
+// Free-text reasons would arrive unbounded and unsortable. The app sends one
+// of these keys and localises the label itself; anything else is rejected.
+const REPORT_REASONS = new Set([
+  'spam',
+  'scam',
+  'offensive',
+  'sexual',
+  'violence',
+  'illegal',
+  'other',
+]);
 
 // The six secrets are pre-created in the dashboard with this placeholder so
 // the rows exist and can be edited without retyping their names. Until a real
@@ -133,6 +156,10 @@ function shapeOffer(row) {
     images,
     image: row.image || null,
     created_at: row.created_at,
+    // Only ever true on your own offers: the feed query filters everyone
+    // else's hidden offers out entirely. Lets "My requests" say why a post
+    // stopped appearing instead of leaving the owner to guess.
+    hidden: Number(row.report_count || 0) >= REPORT_HIDE_THRESHOLD,
   };
 }
 
@@ -227,7 +254,19 @@ async function handleAuth(request, env) {
     }
     // Remove all offers this user has posted, then the user row itself.
     // Offers go first so a row never lingers without an owner.
+    await db
+      .prepare('DELETE FROM reports WHERE offer_id IN (SELECT id FROM offers WHERE phone = ?)')
+      .bind(cleanPhone)
+      .run();
     await db.prepare('DELETE FROM offers WHERE phone = ?').bind(cleanPhone).run();
+    // Deleting the account has to take the reports this person filed and the
+    // blocks either side of them, or a "delete everything about me" promise
+    // leaves their number sitting in someone else's block list.
+    await db.prepare('DELETE FROM reports WHERE reporter_phone = ?').bind(cleanPhone).run();
+    await db
+      .prepare('DELETE FROM blocks WHERE blocker_phone = ? OR blocked_phone = ?')
+      .bind(cleanPhone, cleanPhone)
+      .run();
     await db.prepare('DELETE FROM users WHERE phone = ?').bind(cleanPhone).run();
     return json({ ok: true });
   }
@@ -406,8 +445,41 @@ async function handleOffers(request, env) {
   if (!db) return json({ error: 'Database not configured' }, 500);
 
   if (request.method === 'GET') {
+    // `?phone=` is the viewer. Old clients (build 11 and earlier) omit it and
+    // simply get no block filtering - they have no block UI. Auto-hiding
+    // applies either way, so those installs get the safety win too.
+    const viewer = normalizePhone(new URL(request.url).searchParams.get('phone'));
+
+    // Four things happen in one statement so the feed stays a single round
+    // trip: count reports per offer, drop offers by people the viewer has
+    // blocked, drop offers the viewer has already reported, and drop offers
+    // that crossed the report threshold for everyone. `report_count` rides
+    // along so shapeOffer can mark the owner's own hidden posts.
+    const sql = `
+      SELECT o.*,
+             (SELECT COUNT(*) FROM reports r WHERE r.offer_id = o.id) AS report_count
+        FROM offers o
+       WHERE (
+               ? = ''
+               OR o.phone IS NULL
+               OR o.phone NOT IN (SELECT blocked_phone FROM blocks WHERE blocker_phone = ?)
+             )
+         -- Reporting something is also a request never to see it again.
+         AND (
+               ? = ''
+               OR o.id NOT IN (SELECT offer_id FROM reports WHERE reporter_phone = ?)
+             )
+         AND (
+               -- You always see your own posts, even once they are hidden
+               -- from everyone else, so a request never just vanishes.
+               (? <> '' AND o.phone = ?)
+               OR (SELECT COUNT(*) FROM reports r WHERE r.offer_id = o.id) < ?
+             )
+       ORDER BY o.created_at DESC`;
+
     const { results } = await db
-      .prepare('SELECT * FROM offers ORDER BY created_at DESC')
+      .prepare(sql)
+      .bind(viewer, viewer, viewer, viewer, viewer, viewer, REPORT_HIDE_THRESHOLD)
       .all();
     return json((results || []).map(shapeOffer));
   }
@@ -475,6 +547,9 @@ async function handleOffers(request, env) {
   if (request.method === 'DELETE') {
     const { id } = await readJson(request);
     if (!id) return json({ error: 'Missing id' }, 400);
+    // Reports first: ids are UUIDs so they are never reused, but leaving
+    // orphans behind would slowly bloat the table the feed query counts.
+    await db.prepare('DELETE FROM reports WHERE offer_id = ?').bind(id).run();
     await db.prepare('DELETE FROM offers WHERE id = ?').bind(id).run();
     return json({ ok: true });
   }
@@ -527,6 +602,159 @@ async function handleUpdateOffer(request, env) {
   const updated = await patchOffer(db, id, patch);
   if (updated.error) return json({ error: updated.error }, updated.status || 400);
   return json({ ok: true });
+}
+
+/* ------------------------------------------------------------------ *
+ * /api/report  +  /api/blocks
+ *
+ * Google Play's UGC policy expects a way to flag a listing and block its
+ * author. Both key off `phone` - the identity the whole API already uses,
+ * and the only owner reference `offers` carries.
+ * ------------------------------------------------------------------ */
+
+async function handleReport(request, env) {
+  if (request.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405);
+  }
+  const db = env.DB;
+  if (!db) return json({ error: 'Database not configured' }, 500);
+
+  const body = await readJson(request);
+  // Accept both spellings: the app sends snake_case like every other route,
+  // but camelCase is the obvious thing to reach for from a REST client.
+  const offerId = body.offer_id || body.offerId;
+  const reporterPhone = normalizePhone(body.reporter_phone || body.reporterPhone);
+  const reporterId = body.reporter_id || body.reporterUserId || null;
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  const details = typeof body.details === 'string' ? body.details.trim().slice(0, 1000) : null;
+
+  if (!offerId) return json({ error: 'Missing offer_id' }, 400);
+  if (!reporterPhone) return json({ error: 'Missing reporter_phone' }, 400);
+  if (!REPORT_REASONS.has(reason)) return json({ error: 'Unknown reason' }, 400);
+
+  const offer = await db
+    .prepare('SELECT id, phone FROM offers WHERE id = ?')
+    .bind(offerId)
+    .first();
+  if (!offer) return json({ error: 'Offer not found' }, 404);
+  if (normalizePhone(offer.phone) === reporterPhone) {
+    return json({ error: 'You cannot report your own request' }, 400);
+  }
+
+  // Re-reporting the same offer overwrites the previous reason instead of
+  // erroring on the unique index or adding a second vote toward the
+  // threshold.
+  await db
+    .prepare(
+      `INSERT INTO reports
+         (id, offer_id, offer_phone, reporter_phone, reporter_id, reason, details, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (offer_id, reporter_phone) DO UPDATE SET
+         reason     = excluded.reason,
+         details    = excluded.details,
+         created_at = excluded.created_at`
+    )
+    .bind(
+      crypto.randomUUID(),
+      offerId,
+      offer.phone || null,
+      reporterPhone,
+      reporterId,
+      reason,
+      details,
+      nowIso()
+    )
+    .run();
+
+  const countRow = await db
+    .prepare('SELECT COUNT(*) AS n FROM reports WHERE offer_id = ?')
+    .bind(offerId)
+    .first();
+  const reports = countRow ? Number(countRow.n) : 0;
+  const hidden = reports >= REPORT_HIDE_THRESHOLD;
+
+  console.log('[report]', offerId, reason, `${reports}/${REPORT_HIDE_THRESHOLD}`, hidden ? 'HIDDEN' : '');
+  return json({ ok: true, reports, hidden }, 201);
+}
+
+async function handleBlocks(request, env) {
+  const db = env.DB;
+  if (!db) return json({ error: 'Database not configured' }, 500);
+
+  // GET /api/blocks?phone=... - the list behind Profile > Blocked people.
+  if (request.method === 'GET') {
+    const blocker = normalizePhone(new URL(request.url).searchParams.get('phone'));
+    if (!blocker) return json({ error: 'Missing phone' }, 400);
+    // A bare phone number is not a useful thing to show in a list, so pull a
+    // name: the account's if they still have one, otherwise the name on
+    // their most recent offer.
+    const { results } = await db
+      .prepare(
+        `SELECT b.blocked_phone, b.created_at,
+                COALESCE(
+                  (SELECT u.name FROM users u WHERE u.phone = b.blocked_phone),
+                  (SELECT o.name FROM offers o WHERE o.phone = b.blocked_phone
+                    ORDER BY o.created_at DESC LIMIT 1)
+                ) AS name
+           FROM blocks b
+          WHERE b.blocker_phone = ?
+          ORDER BY b.created_at DESC`
+      )
+      .bind(blocker)
+      .all();
+    return json(
+      (results || []).map((r) => ({
+        phone: r.blocked_phone,
+        name: r.name || null,
+        created_at: r.created_at,
+      }))
+    );
+  }
+
+  if (request.method === 'POST' || request.method === 'DELETE') {
+    const body = await readJson(request);
+    const blocker = normalizePhone(body.blocker_phone || body.blockerPhone);
+    let blocked = normalizePhone(body.blocked_phone || body.blockedPhone);
+    const offerId = body.offer_id || body.offerId;
+
+    if (!blocker) return json({ error: 'Missing blocker_phone' }, 400);
+
+    // Blocking from a listing: the app knows the offer, not the owner's
+    // number, so let it pass the offer id and resolve the owner here.
+    if (!blocked && offerId) {
+      const offer = await db
+        .prepare('SELECT phone FROM offers WHERE id = ?')
+        .bind(offerId)
+        .first();
+      if (!offer) return json({ error: 'Offer not found' }, 404);
+      blocked = normalizePhone(offer.phone);
+    }
+
+    if (!blocked) return json({ error: 'Missing blocked_phone' }, 400);
+    if (blocked === blocker) return json({ error: 'You cannot block yourself' }, 400);
+
+    if (request.method === 'DELETE') {
+      await db
+        .prepare('DELETE FROM blocks WHERE blocker_phone = ? AND blocked_phone = ?')
+        .bind(blocker, blocked)
+        .run();
+      return json({ ok: true, blocked_phone: blocked, blocked: false });
+    }
+
+    // Blocking twice is a no-op, not an error - the app fires this from a
+    // button that can be double-tapped.
+    await db
+      .prepare(
+        `INSERT INTO blocks (blocker_phone, blocked_phone, created_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT (blocker_phone, blocked_phone) DO NOTHING`
+      )
+      .bind(blocker, blocked, nowIso())
+      .run();
+    return json({ ok: true, blocked_phone: blocked, blocked: true }, 201);
+  }
+
+  return json({ error: 'Method not allowed' }, 405);
 }
 
 /* ------------------------------------------------------------------ *
@@ -659,6 +887,8 @@ export default {
       if (path === '/api/auth') return await handleAuth(request, env);
       if (path === '/api/offers') return await handleOffers(request, env);
       if (path === '/api/update-offer') return await handleUpdateOffer(request, env);
+      if (path === '/api/report') return await handleReport(request, env);
+      if (path === '/api/blocks') return await handleBlocks(request, env);
       if (path === '/api/generate-image') return await handleGenerateImage(request, env);
       if (path.startsWith('/api/image/')) return await handleImage(request, env, path);
 

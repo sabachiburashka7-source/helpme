@@ -72,7 +72,7 @@ function postsThisMonthCount(offers) {
   }).length;
 }
 
-export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onCancelSubscription, onUpgrade, onUpdateProfileImage }) {
+export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onCancelSubscription, onUpgrade, onUpdateProfileImage, blocked = [], onUnblockUser }) {
   const { t, lang } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -494,6 +494,8 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
         onDeleteAccount={onDeleteAccount}
         onCancelSubscription={onCancelSubscription}
         onUpgrade={onUpgrade}
+        blocked={blocked}
+        onUnblockUser={onUnblockUser}
       />
     </AmbientBackground>
   );
@@ -546,6 +548,18 @@ function MyOfferCard({ offer, onRemove }) {
             </Pressable>
           ) : null}
         </View>
+
+        {/* Enough different people reported this that it no longer shows in
+            Browse. The owner keeps seeing it here — a post that just
+            disappeared with no explanation would read as a bug. */}
+        {offer.hidden ? (
+          <GlassSurface tone="danger" radius={radius.lg} shadow="none" style={styles.hiddenNotice}>
+            <Text style={styles.hiddenNoticeTitle}>{t('Hidden from Browse')}</Text>
+            <Text style={styles.hiddenNoticeBody}>
+              {t('Several people reported this request, so it is no longer shown to others.')}
+            </Text>
+          </GlassSurface>
+        ) : null}
 
         <Text style={styles.myCardDesc}>{offer.description}</Text>
 
@@ -794,6 +808,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: ACCENT,
     letterSpacing: -0.2,
+  },
+  hiddenNotice: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  hiddenNoticeTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: colors.danger,
+    letterSpacing: 0.2,
+  },
+  hiddenNoticeBody: {
+    fontSize: 12.5,
+    // textSecondary, not textTertiary: this panel can sit over a photo.
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginTop: 4,
   },
   myCardDesc: {
     fontSize: 14.5,

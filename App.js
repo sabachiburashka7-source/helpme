@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, Alert } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -49,6 +49,9 @@ function AppInner() {
   const [dbOffers, setDbOffers] = useState([]);
   const [myOffers, setMyOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(true);
+  // People this user has blocked: [{ phone, name, created_at }]. Drives the
+  // 'Blocked people' list in Profile; the feed itself is filtered server-side.
+  const [blocked, setBlocked] = useState([]);
   const { t } = useTranslation();
 
   // Hydrate the persisted user once on mount. After hydration, refresh from
@@ -80,20 +83,35 @@ function AppInner() {
     };
   }, []);
 
+  // `?phone=` tells the Worker who is looking, so it can leave out offers by
+  // people this user has blocked. Offers reported by enough people are
+  // filtered out server-side for everyone.
+  const fetchOffers = useCallback(async () => {
+    if (!user?.phone) return;
+    const r = await fetch(apiUrl(`/api/offers?phone=${encodeURIComponent(user.phone)}`));
+    const data = await r.json();
+    if (!Array.isArray(data)) return;
+    setDbOffers(data);
+    setMyOffers(data.filter((o) => o.phone === user.phone));
+  }, [user?.phone]);
+
+  const fetchBlocked = useCallback(async () => {
+    if (!user?.phone) return;
+    try {
+      const r = await fetch(apiUrl(`/api/blocks?phone=${encodeURIComponent(user.phone)}`));
+      const data = await r.json();
+      if (Array.isArray(data)) setBlocked(data);
+    } catch {}
+  }, [user?.phone]);
+
   useEffect(() => {
     if (!user) return;
     setOffersLoading(true);
-    fetch(apiUrl('/api/offers'))
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setDbOffers(data);
-          setMyOffers(data.filter((o) => o.phone === user.phone));
-        }
-      })
+    fetchOffers()
       .catch(() => {})
       .finally(() => setOffersLoading(false));
-  }, [user]);
+    fetchBlocked();
+  }, [user, fetchOffers, fetchBlocked]);
 
   function handleAuthenticated(u) {
     persistUser(u);
@@ -105,6 +123,7 @@ function AppInner() {
     setUser(null);
     setMyOffers([]);
     setDbOffers([]);
+    setBlocked([]);
   }
 
   async function deleteAccount() {
@@ -188,6 +207,80 @@ function AppInner() {
     } catch {}
 
     return tempId;
+  }
+
+  // --- Moderation -------------------------------------------------------
+  // Google Play's UGC policy expects both of these on an app whose content is
+  // mostly user-posted. Reports accumulate server-side; an offer disappears
+  // from everyone's feed once enough different people flag it.
+
+  async function reportOffer(offerId, reason, details) {
+    if (!user?.phone) return { ok: false, error: 'Not signed in' };
+    try {
+      const r = await fetch(apiUrl('/api/report'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offer_id: offerId,
+          reporter_phone: user.phone,
+          reporter_id: user.id || null,
+          reason,
+          details: details || null,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return { ok: false, error: data?.error || 'Could not send report' };
+      // Reporting something also means never seeing it again — the feed query
+      // enforces that on the next fetch, this makes Browse react right away.
+      setDbOffers((prev) => prev.filter((o) => o.id !== offerId));
+      return { ok: true, hidden: !!data?.hidden };
+    } catch {
+      return { ok: false, error: 'Network error. Try again.' };
+    }
+  }
+
+  async function blockUser(offerId, blockedPhone) {
+    if (!user?.phone) return { ok: false, error: 'Not signed in' };
+    try {
+      const r = await fetch(apiUrl('/api/blocks'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blocker_phone: user.phone,
+          blocked_phone: blockedPhone || null,
+          offer_id: offerId || null,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return { ok: false, error: data?.error || 'Could not block this person' };
+      // Clear their posts straight away. The server already filters them out
+      // of the next fetch; this is just so Browse reacts immediately.
+      const gone = data?.blocked_phone;
+      if (gone) setDbOffers((prev) => prev.filter((o) => o.phone !== gone));
+      fetchBlocked();
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Network error. Try again.' };
+    }
+  }
+
+  async function unblockUser(blockedPhone) {
+    if (!user?.phone) return { ok: false, error: 'Not signed in' };
+    try {
+      const r = await fetch(apiUrl('/api/blocks'), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocker_phone: user.phone, blocked_phone: blockedPhone }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return { ok: false, error: data?.error || 'Could not unblock this person' };
+      setBlocked((prev) => prev.filter((b) => b.phone !== blockedPhone));
+      // Their offers are allowed back into the feed now, so refetch.
+      fetchOffers().catch(() => {});
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Network error. Try again.' };
+    }
   }
 
   async function cancelSubscription() {
@@ -299,7 +392,15 @@ function AppInner() {
         })}
       >
         <Tab.Screen name="Browse">
-          {() => <BrowseScreen dbOffers={dbOffers} loading={offersLoading} />}
+          {() => (
+            <BrowseScreen
+              dbOffers={dbOffers}
+              loading={offersLoading}
+              user={user}
+              onReportOffer={reportOffer}
+              onBlockUser={blockUser}
+            />
+          )}
         </Tab.Screen>
         <Tab.Screen name="My Requests">
           {() => (
@@ -315,6 +416,8 @@ function AppInner() {
               onCancelSubscription={cancelSubscription}
               onUpgrade={handleUpgrade}
               onUpdateProfileImage={updateProfileImage}
+              blocked={blocked}
+              onUnblockUser={unblockUser}
             />
           )}
         </Tab.Screen>
