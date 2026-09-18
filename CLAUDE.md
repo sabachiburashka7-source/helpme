@@ -432,83 +432,96 @@ the developer account, identity checks or payments.
 | Play Console developer account + app entry created | Done (owner confirmed 2026-09-02) |
 | Play Console API access for Claude (`tools/play/`) | Done — key installed, `node play.js doctor` passes as of 2026-09-12 |
 | Store listing content (title, descriptions, screenshots, feature graphic) | Done — verified live on 2026-09-12: title, both descriptions, icon, feature graphic, 3 phone screenshots |
-| Content rating questionnaire, data safety form, app access declarations | TODO (user task — no API exists, must be done in the console) |
 | Closed testing track — 12+ testers, 14 continuous days | Done — 18 testers; all three Google criteria show complete as of 2026-09-12 |
-| Content rating questionnaire | **TODO — the one item under "Need attention" in App content. Blocks production even after access is granted.** |
-| Data safety form, app access declarations | Done — App content shows only the content rating outstanding |
-| **Production access granted by Google** | **APPLIED 2026-09-12, 1:58 PM — under review, Google says 7 days or less. First application was REJECTED 2026-08-25.** |
+| Content rating questionnaire | Done — submitted 2026-09-18, 6:43 PM. App content now reads "You're all caught up." |
+| Data safety form, app access declarations | Done |
+| **Production access granted by Google** | **GRANTED — confirmed on the dashboard 2026-09-18. Applied 2026-09-12; first application was REJECTED 2026-08-25.** |
+| Production country targeting | Done — Georgia only, set 2026-09-18. Console-only; the API cannot set countries for a `completed` release. |
+| **Production release submitted** | **Build 11 sent for full rollout 2026-09-18, awaiting Google review.** |
 
-### Production access: rejected once, re-applied 2026-09-12
+### Production access: granted 2026-09-18, after one rejection
+
+**Granted.** The Play Console dashboard confirms: "Congratulations! Your
+app has been granted Google Play production access." Verified against the
+live API the same day — `production` and `beta` now accept releases that
+previously returned `FAILED_PRECONDITION`. Nothing here is blocked any
+more; leave this section as history only.
 
 **History.** The first application was rejected on **2026-08-25, 11:41 AM**:
 "We reviewed your application, and determined that your app requires more
-testing before you can access production." The likely cause is visible in
-the answers that were still saved in the form: the three *closed test*
-questions were 53, 131 and 126 characters out of 300 and said nothing
-concrete ("They liked it a lot… Everything was as i expected"). The
-*app* questions were near the limit and specific — that half was fine.
+testing before you can access production." The cause was visible in the
+saved answers: the three *closed test* questions were 53, 131 and 126
+characters out of 300 and said nothing concrete. The *app* questions were
+specific — that half was fine. Separately, the Supabase free project
+auto-paused mid-test and took the backend offline, silently failing an
+earlier 14-day test; moving to Cloudflare on 2026-08-31 fixed that.
 
-Also worth knowing: the Supabase free project auto-paused mid-test and
-took the backend offline, which silently failed an earlier 14-day test.
-That is the honest reason the earlier testing looked thin, and moving to
-Cloudflare on 2026-08-31 is the fix.
+**Second application, submitted 2026-09-12 at 1:58 PM, granted by
+2026-09-18.** Rewrote the three closed-test answers, finished a truncated
+production-readiness answer, replaced the "what did you do differently"
+answer. Facts used: 18 opted-in testers recruited through a **paid testing
+provider**; two new builds (10 on 09-02, 11 on 09-06) after the rejection;
+launch crash, safe-area text, map and three-post cap all fixed.
 
-**Second application, submitted 2026-09-12 at 1:58 PM.** Rewrote the
-three closed-test answers, finished a truncated production-readiness
-answer, and replaced the "what did you do differently" answer. Key facts
-used, all verified: 18 opted-in testers; testers recruited through a
-**paid testing provider** (the owner confirmed this — the first
-application incorrectly said friends and family); two new builds (10 on
-09-02, 11 on 09-06) shipped after the rejection; the launch crash, the
-safe-area text, the map, and the three-post cap all fixed.
+Clicking **Apply** surfaced a `(5EF69F45)` "unexpected error" snackbar.
+It was a stale UI artifact — the submission had succeeded.
 
-Clicking **Apply** surfaces a `(5EF69F45)` "unexpected error" snackbar.
-**Ignore it** — it is a stale UI artifact. The submission succeeded;
-reloading the dashboard shows "We have your application for production
-access… Applied today, 1:58 PM."
+### Going to production: the two console-only steps the API cannot do
 
-**There is no API for any of this.** It was done by driving the Play
-Console in the owner's Chrome via the browser tools. `tools/play/` cannot
-see or submit the application, and `play.js status` will keep reporting
-production as `empty` until access is granted.
+Both were done on 2026-09-18 by driving the Play Console in the owner's
+Chrome. Neither has an API, and both silently block a production release:
 
-### The production and open-testing tracks are locked until Google grants production access
+1. **Content rating questionnaire.** Was sitting half-finished from
+   2026-06-07 with no IARC certificate. Submitted 2026-09-18, 6:43 PM.
+2. **Production country targeting.** A brand-new production track targets
+   *no* countries, and `edits.validate` then fails with `PERMISSION_DENIED
+   :: Release in track targeting no countries`. Set to **Georgia only**,
+   matching Twilio's geo permissions — outside Georgia the SMS sign-in
+   cannot deliver a code. Play Console → Production → Countries / regions.
 
-Verified against the live API on 2026-09-12. Pushing a release to
-`production` or `beta` returns `400 FAILED_PRECONDITION` with Google's
-useless generic body:
+   Do **not** try to fix this through the API: passing `countryTargeting`
+   on the release returns `INVALID_ARGUMENT :: Country targeting is only
+   supported for staged releases`. It works only for a partial rollout,
+   never for a `completed` one.
 
-```json
-{ "error": { "code": 400, "message": "Precondition check failed.",
-             "status": "FAILED_PRECONDITION" } }
-```
+Useful trick for checking readiness without publishing anything: create an
+edit, stage the track, call `edits.validate`, then `edits.delete` the edit.
+It surfaces the real blocking error while committing nothing.
 
-The same release to `alpha` or `internal` succeeds. That split — both
-public-facing tracks refused, both invite-only tracks fine — is the
-signature of a **personal developer account that has finished closed
-testing but has not yet been granted production access**. It is not a
-permissions problem, not a bad build, and not a signing problem; do not
-send anyone off fixing those.
+### Content rating: Kheli is rated 12+ (USK 16+), and why
 
-Finishing the 14 days does **not** unlock production by itself. The owner
-must submit the *Apply for production access* form in Play Console and
-wait for Google to review it (typically a few days, occasionally longer).
-**Google exposes no API for that form** — `tools/play/` cannot do it, and
-neither can Claude. It is console-only, like the content rating and data
-safety forms.
+Submitted answers: category **All Other App Types**; user-generated content
+is the **primary** source of content; app shows online content (listings
+plus AI-generated illustrations); precise device location is shared with
+other users. Everything else — violence, sexuality, language, drugs,
+age-restricted goods, digital purchases, cash/crypto rewards — answered No.
 
-Once Google approves, nothing needs rebuilding. Build 11 is already
-uploaded; promote the existing copy without touching the bundle:
+Resulting ratings: Google Play **12+**, ESRB **Teen**, PEGI **Parental
+guidance**, USK **16+** ("Increased Communication Risks"), ClassInd **12+**.
+Interactive elements on all of them: *Users Interact*, *Shares Location*.
+
+The age band is driven entirely by one combination: UGC is primary **and**
+the app has **no block, no report, no moderation** — verified, those
+features do not exist anywhere in `screens/`, `components/` or
+`cloudflare/src/index.js`. That is also a Google Play UGC-policy exposure,
+not just a rating cost. Adding a report-content action and a block-user
+action would likely lower the rating and close the policy gap; a new
+questionnaire can be submitted at any time afterwards.
+
+### Release submitted 2026-09-18
+
+Build 11 promoted to production at full rollout, bundled for review with
+the country change and the content rating:
 
 ```bash
 cd helpme/tools/play
-node play.js upload --track production --version-code 11 --status completed --confirm \
-  --notes "Kheli is here. Post what you need doing, set your price, and get help from people nearby."
+node play.js upload --track production --version-code 11 --status completed --confirm   --notes "Kheli is here. Post what you need doing, set your price, and get help from people nearby."
 ```
 
-Re-run that same command to test whether access has been granted yet — it
-fails safely. Every change is staged in a Play "edit" that is abandoned on
-any error, so a refused attempt changes nothing on the live listing.
+Managed publishing is **off**, so once Google approves, the app goes live
+by itself — nobody needs to press anything. Watch progress at Play Console
+→ Publishing overview. `node play.js status` shows the track contents but
+**not** the review state; the console is the only place that shows that.
 
 ## Common debug recipes
 
