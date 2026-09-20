@@ -375,6 +375,42 @@ Set as **encrypted secrets**, never in `wrangler.jsonc`:
   (who cannot receive a Georgian SMS) sign in. Both must be set for the
   bypass to activate.
 
+  **These two values ARE the credentials in Play Console -> App content ->
+  Sign in details. They are one fact stored in two systems, and they drifted
+  apart once — that cost a rejection (see below). `TEST_PHONE` must be the
+  full E.164 number including the `+` and the country code; the comparison in
+  `handleAuth` is an exact string match, so `995555000001` does NOT match an
+  inbound `+995555000001` and the bypass silently never fires.** The declared
+  phone is `+995555000001`; the 6-digit code lives only in Play Console, never
+  in this public repo.
+
+  Secret values cannot be read back, so **never assume** the bypass works —
+  prove it against the live Worker before every submission. This is the whole
+  check, and it sends no SMS:
+
+```bash
+# 1. must answer {"status":"sent"}  2. must answer a user object, not an error
+curl -s -X POST https://helpme-api.semolina.workers.dev/api/auth   -H "Content-Type: application/json"   -d '{"action":"send_code","intent":"login","phone":"+995555000001"}'
+curl -s -X POST https://helpme-api.semolina.workers.dev/api/auth   -H "Content-Type: application/json"   -d '{"action":"verify_code","intent":"login","phone":"+995555000001","code":"<code from Play Console>"}'
+```
+
+  `{"error":"No account found for this number"}` from the first call is the
+  signature of a mismatch: the Worker did not recognise the number as the test
+  phone at all, so it fell through to the ordinary login path.
+
+### Rejected 2026-09-19: "Login credentials are incorrect"
+
+Build 11 was rejected because the reviewer could not sign in — their
+screenshot showed `No account found for this number` after entering
+`555000001`. Play Console declared `+995555000001`, but the Worker's
+`TEST_PHONE` secret held something else, so the bypass never fired and the
+login fell through to a real account lookup that found nothing.
+
+Fixed 2026-09-20 by setting `TEST_PHONE` / `TEST_OTP` on the Worker to exactly
+the declared values and verifying with the two calls above. Nothing in the
+Play Console declaration needed changing — the instructions there were already
+correct and specific. Re-submitted for review the same day.
+
 ### Debugging the backend
 
 ```bash
@@ -479,7 +515,7 @@ the developer account, identity checks or payments.
 | Data safety form, app access declarations | Done |
 | **Production access granted by Google** | **GRANTED — confirmed on the dashboard 2026-09-18. Applied 2026-09-12; first application was REJECTED 2026-08-25.** |
 | Production country targeting | Done — Georgia only, set 2026-09-18. Console-only; the API cannot set countries for a `completed` release. |
-| **Production release submitted** | **Build 11 sent for full rollout 2026-09-18, awaiting Google review.** |
+| **Production release submitted** | **REJECTED 2026-09-19 — "Login credentials are incorrect"; the reviewer could not sign in. Cause and fix recorded under the Cloudflare secrets section. Re-submitted 2026-09-20.** |
 | Report content + block user (Google Play UGC policy) | Done — build 12, 2026-09-18. Worker deployed, D1 tables live. |
 | **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 12 is live — should lower the 12+ rating.** |
 
