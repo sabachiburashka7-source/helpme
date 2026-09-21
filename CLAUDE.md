@@ -624,7 +624,7 @@ the developer account, identity checks or payments.
 | Wipe test data before the public launch | Done 2026-09-21 — every account, post and picture deleted; backup and undo steps under "Production data wiped" in the Cloudflare section |
 | Report content + block user (Google Play UGC policy) | Done in the Worker 2026-09-18. Build 12 was never uploaded, so the in-app buttons ship with build 13. |
 | Server stops trusting the phone number in requests (session tokens) | Done 2026-09-22 — Worker live; build 13 carries the tokens. Old builds keep working until 2026-10-01. See "Who is asking". |
-| **Build 13 (1.0.7) to production** | **Submitted for review 2026-09-22** — see "Release submitted 2026-09-22" below. |
+| **Build 13 (1.0.7) to production** | **Built 2026-09-22, NOT yet uploaded** — the production upload needs the owner's explicit go-ahead in chat. See "Build 13" below. |
 | **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 13 is live — should lower the 12+ rating.** |
 
 ### Production access: granted 2026-09-18, after one rejection
@@ -716,11 +716,14 @@ by itself — nobody needs to press anything. Watch progress at Play Console
 → Publishing overview. `node play.js status` shows the track contents but
 **not** the review state; the console is the only place that shows that.
 
-### Release submitted 2026-09-22 — build 13 (1.0.7), the security update
+### Build 13 (1.0.7), the security update — built 2026-09-22, upload pending
 
 Session tokens (see "Who is asking"), plus the Report / Block buttons that
 build 12 had but never shipped. The Worker side was deployed first, the same
-day, and stays compatible with build 11 until 2026-10-01.
+day, and stays compatible with build 11 until 2026-10-01. The AAB is built
+(`android/app/build/outputs/bundle/release/app-release.aab`, versionCode 13);
+a `--dry-run` of the command below passed, but the real production upload
+was held for the owner's explicit go-ahead. Run it once they say yes:
 
 ```bash
 cd helpme/tools/play
