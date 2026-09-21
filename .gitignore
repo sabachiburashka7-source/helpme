@@ -63,3 +63,7 @@ yarn-error.*
 **/service-account.json
 **/service-account*.json
 tools/play/service-account.json
+
+# Wrangler local state (a local D1 can hold copies of real data) and local secrets
+**/.wrangler/
+**/.dev.vars*

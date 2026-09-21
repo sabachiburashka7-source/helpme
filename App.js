@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, Alert } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Alert, Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,11 +11,20 @@ import { colors, glass, radius } from './components/theme';
 import { BlurSurface } from './components/Glass';
 import { I18nProvider, useTranslation } from './components/i18n';
 import * as Storage from './components/storage';
-import { apiUrl } from './components/apiBase';
+import { apiFetch, setSessionToken, setApiHandlers } from './components/api';
 
 const Tab = createBottomTabNavigator();
 const STORAGE_KEY = 'helpme.user';
+const STORE_PACKAGE = 'com.sabachiburashka.helpme';
+// Shown on the sign-in screen when the app signs someone out by itself.
+const SIGN_IN_AGAIN = 'For your security, please sign in again with your phone number.';
 let tempCounter = 0;
+
+function openStoreListing() {
+  Linking.openURL(`market://details?id=${STORE_PACKAGE}`).catch(() =>
+    Linking.openURL(`https://play.google.com/store/apps/details?id=${STORE_PACKAGE}`).catch(() => {})
+  );
+}
 
 async function loadStoredUser() {
   try {
@@ -52,7 +61,30 @@ function AppInner() {
   // People this user has blocked: [{ phone, name, created_at }]. Drives the
   // 'Blocked people' list in Profile; the feed itself is filtered server-side.
   const [blocked, setBlocked] = useState([]);
+  // Translation key for the sign-in screen when the app signed someone out.
+  const [signInNotice, setSignInNotice] = useState(null);
+  const updatePromptShown = useRef(false);
   const { t } = useTranslation();
+
+  // What happens when the server stops accepting this sign-in, or says this
+  // build is too old. Registered before anything below fetches.
+  useEffect(() => {
+    setApiHandlers({
+      onSessionEnded: () => endSession(SIGN_IN_AGAIN),
+      onUpdateRequired: () => {
+        if (updatePromptShown.current) return;
+        updatePromptShown.current = true;
+        Alert.alert(
+          t('Update Kheli'),
+          t('This version of Kheli is out of date. Please update it from Google Play.'),
+          [
+            { text: t('Later'), style: 'cancel' },
+            { text: t('Update'), onPress: openStoreListing },
+          ]
+        );
+      },
+    });
+  }, [t]);
 
   // Hydrate the persisted user once on mount. After hydration, refresh from
   // the server so tier / subscription_expires_at reflect any changes since
@@ -61,18 +93,22 @@ function AppInner() {
     let cancelled = false;
     loadStoredUser().then((u) => {
       if (cancelled) return;
+      if (u && !u.token) {
+        // Signed in on a build from before session tokens. The server no
+        // longer takes a bare phone number on trust, so start again.
+        persistUser(null);
+        setSignInNotice(SIGN_IN_AGAIN);
+        setUserHydrated(true);
+        return;
+      }
+      setSessionToken(u?.token);
       setUser(u);
       setUserHydrated(true);
-      if (!u || !u.phone) return;
-      fetch(apiUrl('/api/auth'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'me', phone: u.phone }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((fresh) => {
-          if (cancelled || !fresh || !fresh.phone) return;
-          const merged = { ...u, ...fresh };
+      if (!u) return;
+      apiFetch('/api/auth', { method: 'POST', body: { action: 'me' } })
+        .then(({ ok, data }) => {
+          if (cancelled || !ok || !data?.phone) return;
+          const merged = { ...u, ...data };
           persistUser(merged);
           setUser(merged);
         })
@@ -83,13 +119,12 @@ function AppInner() {
     };
   }, []);
 
-  // `?phone=` tells the Worker who is looking, so it can leave out offers by
-  // people this user has blocked. Offers reported by enough people are
-  // filtered out server-side for everyone.
+  // The server knows who is looking from the session, so it can leave out
+  // offers by people this user has blocked. Offers reported by enough
+  // people are filtered out server-side for everyone.
   const fetchOffers = useCallback(async () => {
     if (!user?.phone) return;
-    const r = await fetch(apiUrl(`/api/offers?phone=${encodeURIComponent(user.phone)}`));
-    const data = await r.json();
+    const { data } = await apiFetch('/api/offers');
     if (!Array.isArray(data)) return;
     setDbOffers(data);
     setMyOffers(data.filter((o) => o.phone === user.phone));
@@ -98,8 +133,7 @@ function AppInner() {
   const fetchBlocked = useCallback(async () => {
     if (!user?.phone) return;
     try {
-      const r = await fetch(apiUrl(`/api/blocks?phone=${encodeURIComponent(user.phone)}`));
-      const data = await r.json();
+      const { data } = await apiFetch('/api/blocks');
       if (Array.isArray(data)) setBlocked(data);
     } catch {}
   }, [user?.phone]);
@@ -113,12 +147,19 @@ function AppInner() {
     fetchBlocked();
   }, [user, fetchOffers, fetchBlocked]);
 
+  // `u` is the verify_code response: the account plus its session `token`.
   function handleAuthenticated(u) {
+    setSessionToken(u?.token);
+    setSignInNotice(null);
     persistUser(u);
     setUser(u);
   }
 
-  function handleLogout() {
+  // Forget the sign-in on this phone. `notice` explains it on the sign-in
+  // screen when the app did it rather than the person.
+  function endSession(notice = null) {
+    setSessionToken(null);
+    setSignInNotice(notice);
     persistUser(null);
     setUser(null);
     setMyOffers([]);
@@ -126,17 +167,24 @@ function AppInner() {
     setBlocked([]);
   }
 
+  function handleLogout() {
+    // Kill the session on the server too, so the token is worthless even if
+    // it was copied off this phone. The request carries the token before
+    // endSession clears it.
+    apiFetch('/api/auth', { method: 'POST', body: { action: 'logout' } }).catch(() => {});
+    endSession();
+  }
+
   async function deleteAccount() {
     if (!user) return { ok: false, error: 'Not signed in' };
     try {
-      const r = await fetch(apiUrl('/api/auth'), {
+      const { ok, data } = await apiFetch('/api/auth', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete_account', phone: user.phone }),
+        body: { action: 'delete_account' },
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return { ok: false, error: data?.error || 'Could not delete account' };
-      handleLogout();
+      if (!ok) return { ok: false, error: data?.error || 'Could not delete account' };
+      // The server has already ended every session on the account.
+      endSession();
       return { ok: true };
     } catch {
       return { ok: false, error: 'Network error. Try again.' };
@@ -151,14 +199,9 @@ function AppInner() {
     setMyOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, profile_image: dataUrl || null } : o)));
     setDbOffers((prev) => prev.map((o) => (o.phone === user.phone ? { ...o, profile_image: dataUrl || null } : o)));
     try {
-      const r = await fetch(apiUrl('/api/auth'), {
+      const r = await apiFetch('/api/auth', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update_profile_image',
-          phone: user.phone,
-          profile_image: dataUrl || null,
-        }),
+        body: { action: 'update_profile_image', profile_image: dataUrl || null },
       });
       if (!r.ok) throw new Error('save failed');
     } catch {
@@ -184,20 +227,19 @@ function AppInner() {
     setDbOffers((prev) => [localOffer, ...prev]);
 
     try {
-      const r = await fetch(apiUrl('/api/offers'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(offerData),
-      });
+      // Who posted it (name, photo, phone) is filled in by the server from
+      // the session; only the request itself is sent.
+      const { name, avatar, profile_image, phone, ...content } = offerData;
+      const r = await apiFetch('/api/offers', { method: 'POST', body: content });
       // Quota exhausted: roll back the optimistic insert and report it so the
       // caller can show the paywall instead of pretending the post succeeded.
       if (r.status === 402) {
-        const body = await r.json().catch(() => ({}));
+        const body = r.data || {};
         setMyOffers((prev) => prev.filter((o) => o.id !== tempId));
         setDbOffers((prev) => prev.filter((o) => o.id !== tempId));
         return { error: 'quota_exceeded', limit: body?.limit, used: body?.used, tier: body?.tier };
       }
-      const saved = await r.json();
+      const saved = r.data;
       if (saved && saved.id) {
         const savedWithFlag = { ...saved, generatingImage: true };
         setMyOffers((prev) => prev.map((o) => (o.id === tempId ? savedWithFlag : o)));
@@ -217,19 +259,11 @@ function AppInner() {
   async function reportOffer(offerId, reason, details) {
     if (!user?.phone) return { ok: false, error: 'Not signed in' };
     try {
-      const r = await fetch(apiUrl('/api/report'), {
+      const { ok, data } = await apiFetch('/api/report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          offer_id: offerId,
-          reporter_phone: user.phone,
-          reporter_id: user.id || null,
-          reason,
-          details: details || null,
-        }),
+        body: { offer_id: offerId, reason, details: details || null },
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return { ok: false, error: data?.error || 'Could not send report' };
+      if (!ok) return { ok: false, error: data?.error || 'Could not send report' };
       // Reporting something also means never seeing it again — the feed query
       // enforces that on the next fetch, this makes Browse react right away.
       setDbOffers((prev) => prev.filter((o) => o.id !== offerId));
@@ -242,17 +276,11 @@ function AppInner() {
   async function blockUser(offerId, blockedPhone) {
     if (!user?.phone) return { ok: false, error: 'Not signed in' };
     try {
-      const r = await fetch(apiUrl('/api/blocks'), {
+      const { ok, data } = await apiFetch('/api/blocks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          blocker_phone: user.phone,
-          blocked_phone: blockedPhone || null,
-          offer_id: offerId || null,
-        }),
+        body: { blocked_phone: blockedPhone || null, offer_id: offerId || null },
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return { ok: false, error: data?.error || 'Could not block this person' };
+      if (!ok) return { ok: false, error: data?.error || 'Could not block this person' };
       // Clear their posts straight away. The server already filters them out
       // of the next fetch; this is just so Browse reacts immediately.
       const gone = data?.blocked_phone;
@@ -267,13 +295,11 @@ function AppInner() {
   async function unblockUser(blockedPhone) {
     if (!user?.phone) return { ok: false, error: 'Not signed in' };
     try {
-      const r = await fetch(apiUrl('/api/blocks'), {
+      const { ok, data } = await apiFetch('/api/blocks', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blocker_phone: user.phone, blocked_phone: blockedPhone }),
+        body: { blocked_phone: blockedPhone },
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return { ok: false, error: data?.error || 'Could not unblock this person' };
+      if (!ok) return { ok: false, error: data?.error || 'Could not unblock this person' };
       setBlocked((prev) => prev.filter((b) => b.phone !== blockedPhone));
       // Their offers are allowed back into the feed now, so refetch.
       fetchOffers().catch(() => {});
@@ -286,13 +312,11 @@ function AppInner() {
   async function cancelSubscription() {
     if (!user) return { ok: false, error: 'Not signed in' };
     try {
-      const r = await fetch(apiUrl('/api/auth'), {
+      const { ok, data } = await apiFetch('/api/auth', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'cancel_subscription', phone: user.phone }),
+        body: { action: 'cancel_subscription' },
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return { ok: false, error: data?.error || 'Could not cancel subscription' };
+      if (!ok) return { ok: false, error: data?.error || 'Could not cancel subscription' };
       const merged = { ...user, ...data };
       persistUser(merged);
       setUser(merged);
@@ -316,11 +340,7 @@ function AppInner() {
     setMyOffers((prev) => prev.filter((o) => o.id !== id));
     setDbOffers((prev) => prev.filter((o) => o.id !== id));
     try {
-      await fetch(apiUrl('/api/offers'), {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
+      await apiFetch('/api/offers', { method: 'DELETE', body: { id } });
     } catch {}
   }
 
@@ -328,17 +348,15 @@ function AppInner() {
     setMyOffers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
     setDbOffers((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
 
-    const { generatingImage, ...persistPatch } = patch;
+    // The illustration URL is saved by the server when it makes the picture,
+    // so only edits to the request itself are sent.
+    const { generatingImage, image, ...persistPatch } = patch;
     if (Object.keys(persistPatch).length > 0) {
-      fetch(apiUrl('/api/offers'), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...persistPatch }),
-      }).catch(() => {});
+      apiFetch('/api/offers', { method: 'PATCH', body: { id, ...persistPatch } }).catch(() => {});
     }
   }
 
-  const AuthContent = <AuthScreen onAuthenticated={handleAuthenticated} />;
+  const AuthContent = <AuthScreen onAuthenticated={handleAuthenticated} notice={signInNotice} />;
 
   const AppContent = (
     <NavigationContainer>

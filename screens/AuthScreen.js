@@ -8,6 +8,7 @@ import FadeInUp from '../components/FadeInUp';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { pickProfileImage, isImageUrl } from '../components/profileImage';
 import { apiUrl } from '../components/apiBase';
+import { apiFetch } from '../components/api';
 import { BgImage } from '../components/BgImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -17,7 +18,9 @@ import {
 const RESEND_COOLDOWN_SECONDS = 30;
 const ACCENT = '#7A1230';
 
-export default function AuthScreen({ onAuthenticated }) {
+// `notice`: optional translation key shown under the form when the app sent
+// the person back here itself (e.g. the server stopped accepting their sign-in).
+export default function AuthScreen({ onAuthenticated, notice }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState('login');
   const [step, setStep] = useState('details'); // 'details' | 'code'
@@ -86,16 +89,16 @@ export default function AuthScreen({ onAuthenticated }) {
 
     setBusy(true);
     try {
-      const r = await fetch(apiUrl('/api/auth'), {
+      const r = await apiFetch('/api/auth', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        auth: false,
+        body: {
           action: 'send_code',
           phone: phoneE164,
           intent: isRegister ? 'register' : 'login',
-        }),
+        },
       });
-      const data = await r.json();
+      const { data } = r;
       if (!r.ok) {
         flashError(data?.error || t('Something went wrong'));
         setBusy(false);
@@ -120,19 +123,19 @@ export default function AuthScreen({ onAuthenticated }) {
 
     setBusy(true);
     try {
-      const r = await fetch(apiUrl('/api/auth'), {
+      const r = await apiFetch('/api/auth', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        auth: false,
+        body: {
           action: 'verify_code',
           phone: phoneE164,
           code: trimmedCode,
           intent: isRegister ? 'register' : 'login',
           name: isRegister ? name.trim() : undefined,
           profile_image: isRegister ? profileImage : undefined,
-        }),
+        },
       });
-      const data = await r.json();
+      const { data } = r;
       if (!r.ok) {
         flashError(data?.error || t('Something went wrong'));
         setBusy(false);
@@ -309,6 +312,10 @@ export default function AuthScreen({ onAuthenticated }) {
                       <Text style={styles.errText}>{error}</Text>
                     </GlassSurface>
                   </Animated.View>
+                ) : notice ? (
+                  <GlassSurface tone="strong" radius={radius.lg} shadow="subtle" style={[styles.errBox, styles.noticeBox]}>
+                    <Text style={styles.noticeText}>{t(notice)}</Text>
+                  </GlassSurface>
                 ) : null}
 
                 <View style={{ height: 26 }} />
@@ -453,6 +460,8 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   errText: { color: colors.danger, fontSize: 13, fontWeight: '700' },
+  noticeBox: { marginTop: 16 },
+  noticeText: { color: colors.text, fontSize: 13, fontWeight: '600' },
 
   cta: { alignSelf: 'stretch' },
 

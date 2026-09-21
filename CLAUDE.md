@@ -120,6 +120,7 @@ If a clone reappears, also run:
 |---|---|
 | `components/storage.js` | AsyncStorage wrapper. `getItem/setItem/removeItem`. |
 | `components/apiBase.js` | `apiUrl('/api/...')` -> absolute Cloudflare Worker URL. Always use this; never bare relative `/api/...`. |
+| `components/api.js` | `apiFetch(path, { method, body, auth })` — **every** call to the API goes through it. Adds the session token (`Authorization: Bearer`) and `X-Kheli-Build`, and turns `session_invalid` / `update_required` answers into sign-out / "update Kheli". Never `fetch(apiUrl('/api/...'))` directly. See "Who is asking" in the Cloudflare section. |
 | `components/location.js` | `getCurrentLocation()` via `expo-location`. |
 | `components/profileImage.js` | `pickProfileImage` / `pickOfferImages` via `expo-image-picker`, returning data URLs. |
 | `components/MapPicker.js` | MapLibre map inside `react-native-webview`. Used for both picking (draggable) and detail view (`draggable={false}`). No Google Maps API key needed — tiles from openfreemap. |
@@ -291,7 +292,8 @@ neither.
   - `schema.sql` — D1 tables. Safe to re-run (`IF NOT EXISTS`).
   - `wrangler.jsonc` — bindings. Secrets are deliberately NOT here.
 - **D1 database** `helpme-db` (region EEUR), binding `DB`. Tables `users`,
-  `offers`, `reports` and `blocks`. Replaces Supabase Postgres.
+  `offers`, `reports`, `blocks`, `sessions` (sign-in tokens, hashed) and
+  `auth_failures` (wrong reviewer-code guesses). Replaces Supabase Postgres.
 - **KV namespace** `IMAGES`, binding `IMAGES`. Holds the generated PNGs
   and replaces Supabase Storage; they are served back by the Worker at
   `/api/image/<offer-id>.png`, so the app still just stores a URL string.
@@ -319,6 +321,58 @@ this or the app will receive the wrong shapes:
   `nodejs_compat` flag set.
 
 
+### Who is asking — session tokens (2026-09-22, Worker + build 13)
+
+Until 2026-09-22 the API believed whatever phone number a request carried.
+The SMS code only guarded the app's own sign-in screen, so anyone who sent
+requests straight to the (public) server address could delete any account,
+change anyone's photo, post in anyone's name, and edit, delete, report or
+block with any post or number — and the feed hands out every poster's
+number. Fixed in the Worker (live 2026-09-22) and in build 13:
+
+- `verify_code` — Twilio path and the TEST_PHONE bypass alike — returns the
+  user plus a random `token`. The app keeps it inside the stored user and
+  sends `Authorization: Bearer <token>` on every call via `components/api.js`.
+  Only the token's SHA-256 is stored, in the D1 `sessions` table.
+- **The Worker takes the caller's phone from the session, never from the
+  body.** `phone`, `reporter_phone`, `blocker_phone` and `?phone=` in
+  requests are ignored. Offers can only be edited, deleted or illustrated by
+  their owner (403). A post's name, initials and photo come from the account.
+  `generate-image` draws from the saved description, once per offer, and
+  writes `offers.image` itself — so `image`, `name`, `avatar` and
+  `profile_image` are no longer PATCHable. Photos must be `data:image/...`
+  URLs; links to other servers are dropped.
+- `401 {code:'session_invalid'}` makes the app sign out and show "please sign
+  in again". `426 {code:'update_required'}` makes it offer "Update Kheli". The
+  app sends `X-Kheli-Build`; raise `MIN_BUILD` in `src/index.js` to force
+  every older build to update.
+- `action: 'logout'` kills this device's session; `delete_account` kills all
+  of the account's sessions and also deletes its offers' pictures from KV
+  (deleting a single offer does too). Sessions unused for 180 days expire.
+- Wrong guesses at the TEST_PHONE code are capped at 10 per network per
+  15 minutes and 100 in total per hour (then 429 "Too many attempts"). If a
+  reviewer ever hits that, someone is hammering the code — clear it with
+  `DELETE FROM auth_failures;`.
+- The reviewer account skips the monthly quota but is capped at 10 posts a
+  day, so a leaked code cannot run up the OpenAI bill.
+
+**Legacy window for builds 11/12 (no token) — closes 2026-10-01 00:00 UTC.**
+Until `LEGACY_WRITES_UNTIL`, a request with no token may still load the feed
+and post, illustrate and delete its own requests the old way, but only for
+accounts that exist and have **never used a token** — a phone that has
+signed in on build 13 is protected immediately. Everything else (delete
+account, photo, `me`, report, block, reading a block list) already needs a
+token. After the date, builds 11/12 can only sign in and are told to update.
+To close it sooner or push it back, change `LEGACY_WRITES_UNTIL` in
+`src/index.js` (or set a `LEGACY_WRITES_UNTIL` variable on the Worker) and
+deploy. **Only push it back if build 13 is not live by then** — it is the
+last way in without a token.
+
+**Security test — run before every Worker deploy that touches auth, offers,
+reports or blocks:** `cd helpme/cloudflare && node test/security.test.cjs`.
+78 checks against wrangler's in-memory local D1/KV with a stand-in OpenAI;
+nothing touches production.
+
 ### Moderation — reports and blocks (shipped 2026-09-18, build 12)
 
 Google Play's User Generated Content policy expects an app whose content is
@@ -327,7 +381,10 @@ Both are keyed on **`phone`** — the identity the rest of the API already
 uses (quota counting, `delete_account`, `offers.phone`). There is no user id
 on `offers` to join against, so do not switch these to `users.id`.
 
-- `POST /api/report` — `{ offer_id, reporter_phone, reason, details? }`.
+All of these need a session token; the reporter / blocker / viewer is
+whoever the session belongs to (see "Who is asking" above).
+
+- `POST /api/report` — `{ offer_id, reason, details? }`.
   `reason` must be one of the `REPORT_REASONS` set in `src/index.js`, which
   mirrors `components/moderation.js`; anything else is a 400. Reporting your
   own offer is a 400, a missing offer is a 404. Returns
@@ -337,13 +394,17 @@ on `offers` to join against, so do not switch these to `users.id`.
   only knows the listing. GET returns `[{ phone, name, created_at }]`, where
   `name` falls back from the account to their most recent offer.
 
-**`GET /api/offers` now takes `?phone=<viewer>`** and filters four ways in one
-statement: drops authors the viewer blocked, drops offers the viewer already
+**`GET /api/offers`** filters four ways in one statement for the signed-in
+viewer: drops authors the viewer blocked, drops offers the viewer already
 reported, drops offers past `REPORT_HIDE_THRESHOLD` (3 **distinct** reporters)
 for everyone else, and always keeps the viewer's own posts so a request never
 silently vanishes from "My requests". Those carry `hidden: true` so the owner
-gets told why. Old clients omit `?phone=` and simply skip the block filter —
-threshold hiding still applies to them.
+gets told why. Builds 11/12 send no token: until the legacy window closes
+they get the unfiltered public feed (threshold hiding still applies), and
+after it, nothing.
+
+Build 12 was never uploaded to Play, so the Report / Block buttons first
+reach users in **build 13**.
 
 The unique index on `reports (offer_id, reporter_phone)` is what makes
 "distinct" true, so the auto-hide count is a plain `COUNT(*)`. Re-reporting
@@ -389,7 +450,7 @@ Set as **encrypted secrets**, never in `wrangler.jsonc`:
   check, and it sends no SMS:
 
 ```bash
-# 1. must answer {"status":"sent"}  2. must answer a user object, not an error
+# 1. must answer {"status":"sent"}  2. must answer a user object with a "token", not an error
 curl -s -X POST https://helpme-api.semolina.workers.dev/api/auth   -H "Content-Type: application/json"   -d '{"action":"send_code","intent":"login","phone":"+995555000001"}'
 curl -s -X POST https://helpme-api.semolina.workers.dev/api/auth   -H "Content-Type: application/json"   -d '{"action":"verify_code","intent":"login","phone":"+995555000001","code":"<code from Play Console>"}'
 ```
@@ -397,6 +458,10 @@ curl -s -X POST https://helpme-api.semolina.workers.dev/api/auth   -H "Content-T
   `{"error":"No account found for this number"}` from the first call is the
   signature of a mismatch: the Worker did not recognise the number as the test
   phone at all, so it fell through to the ordinary login path.
+
+  Without the real code, a **wrong** code proves the same thing: the bypass
+  answers `{"error":"Incorrect or expired code"}` (the Twilio path would not).
+  Each wrong code counts toward the guess limit above, so send one, not ten.
 
 ### Rejected 2026-09-19: "Login credentials are incorrect"
 
@@ -443,7 +508,13 @@ Browsing and posting still work (`POST /api/offers` needs no `users` row; a
 missing row counts as free tier), but changing the profile photo fails with
 "User not found". Fix for a person: Profile -> Sign out -> Register again. The
 `TEST_PHONE` account rebuilds itself on the next reviewer sign-in, because the
-`verify_code` bypass creates the row when it is missing.
+`verify_code` bypass creates the row when it is missing. (Since 2026-09-22 the
+Worker refuses a bare phone for `me` and the photo change outright, and build
+13 signs anyone without a token out on launch, so this settles itself.)
+
+**If you ever wipe `users` again, wipe `sessions` with it.** A session whose
+account is gone is answered with `session_invalid`, so it is harmless, but it
+is clutter.
 
 ### Debugging the backend
 
@@ -551,8 +622,10 @@ the developer account, identity checks or payments.
 | Production country targeting | Done — Georgia only, set 2026-09-18. Console-only; the API cannot set countries for a `completed` release. |
 | **Production release submitted** | **REJECTED 2026-09-19 — "Login credentials are incorrect"; the reviewer could not sign in. Cause and fix recorded under the Cloudflare secrets section. Re-submitted 2026-09-20. Owner reported it live on the Play Store 2026-09-21.** |
 | Wipe test data before the public launch | Done 2026-09-21 — every account, post and picture deleted; backup and undo steps under "Production data wiped" in the Cloudflare section |
-| Report content + block user (Google Play UGC policy) | Done — build 12, 2026-09-18. Worker deployed, D1 tables live. |
-| **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 12 is live — should lower the 12+ rating.** |
+| Report content + block user (Google Play UGC policy) | Done in the Worker 2026-09-18. Build 12 was never uploaded, so the in-app buttons ship with build 13. |
+| Server stops trusting the phone number in requests (session tokens) | Done 2026-09-22 — Worker live; build 13 carries the tokens. Old builds keep working until 2026-10-01. See "Who is asking". |
+| **Build 13 (1.0.7) to production** | **Submitted for review 2026-09-22** — see "Release submitted 2026-09-22" below. |
+| **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 13 is live — should lower the 12+ rating.** |
 
 ### Production access: granted 2026-09-18, after one rejection
 
@@ -618,10 +691,11 @@ Interactive elements on all of them: *Users Interact*, *Shares Location*.
 The age band was driven entirely by one combination: UGC is primary **and**
 the app had **no block, no report, no moderation**.
 
-**That is no longer true as of build 12 (2026-09-18).** Report and block both
-ship now — see "Moderation" under the Cloudflare section. The rating on file
+**That is no longer true as of build 13.** Report and block both ship in it
+(build 12 had them but was never uploaded) — see "Moderation" under the
+Cloudflare section. The rating on file
 is still the old one, because IARC only re-rates when a new questionnaire is
-submitted. Once build 12 is live, go to Play Console -> App content ->
+submitted. Once build 13 is live, go to Play Console -> App content ->
 Content ratings -> **Start new questionnaire** and answer **Yes** to "ability
 to block users or user-generated content" and **Yes** to "ability to report
 users or user-generated content"; chat moderation stays No (there is no chat).
@@ -641,6 +715,21 @@ Managed publishing is **off**, so once Google approves, the app goes live
 by itself — nobody needs to press anything. Watch progress at Play Console
 → Publishing overview. `node play.js status` shows the track contents but
 **not** the review state; the console is the only place that shows that.
+
+### Release submitted 2026-09-22 — build 13 (1.0.7), the security update
+
+Session tokens (see "Who is asking"), plus the Report / Block buttons that
+build 12 had but never shipped. The Worker side was deployed first, the same
+day, and stays compatible with build 11 until 2026-10-01.
+
+```bash
+cd helpme/tools/play
+node play.js upload --track production --status completed --confirm --notes "Security update: your account is now better protected. You may be asked to sign in once more after updating. Also adds Report and Block for listings."
+```
+
+Everyone who updates is signed out once (their stored sign-in has no token)
+and signs in again with an SMS code. **If build 13 is not live by 2026-09-30,
+push `LEGACY_WRITES_UNTIL` back** or the live build 11 stops working.
 
 ## Common debug recipes
 

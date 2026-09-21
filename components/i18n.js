@@ -166,6 +166,13 @@ const dict = {
     'Sign out?': 'Выйти?',
     'You will need to verify your phone again to sign back in.': 'Чтобы войти снова, потребуется подтвердить номер телефона.',
 
+    // Session / updates
+    'For your security, please sign in again with your phone number.': 'В целях безопасности войдите снова по номеру телефона.',
+    'Update Kheli': 'Обновите Kheli',
+    'This version of Kheli is out of date. Please update it from Google Play.': 'Эта версия Kheli устарела. Обновите приложение в Google Play.',
+    'Update': 'Обновить',
+    'Later': 'Позже',
+
     // Legal
     'Legal': 'Правовая информация',
     'Privacy Policy': 'Политика конфиденциальности',
@@ -321,6 +328,13 @@ const dict = {
     'Upgrade to Pro — $1/month': 'Pro-ზე გადასვლა — $1/თვეში',
     'Sign out?': 'გავიდეთ?',
     'You will need to verify your phone again to sign back in.': 'ხელახლა შესასვლელად დაგჭირდებათ ტელეფონის ნომრის დადასტურება.',
+
+    // Session / updates
+    'For your security, please sign in again with your phone number.': 'უსაფრთხოების მიზნით, გთხოვთ, ხელახლა შეხვიდეთ თქვენი ტელეფონის ნომრით.',
+    'Update Kheli': 'განაახლეთ Kheli',
+    'This version of Kheli is out of date. Please update it from Google Play.': 'Kheli-ს ეს ვერსია მოძველებულია. გთხოვთ, განაახლოთ Google Play-დან.',
+    'Update': 'განახლება',
+    'Later': 'მოგვიანებით',
 
     // Legal
     'Legal': 'სამართლებრივი',

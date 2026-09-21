@@ -9,7 +9,7 @@ import MapPicker from '../components/MapPicker';
 import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { pickProfileImage, pickOfferImages, isImageUrl } from '../components/profileImage';
 import { reverseGeocode } from '../components/reverseGeocode';
-import { apiUrl } from '../components/apiBase';
+import { apiFetch } from '../components/api';
 import { getCurrentLocation } from '../components/location';
 import { BgImage } from '../components/BgImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -182,18 +182,14 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
     }
   }
 
-  async function generateImage(id, description, category) {
+  // The server draws from the request as it was saved, so only the id goes.
+  async function generateImage(id) {
     try {
-      const r = await fetch(apiUrl('/api/generate-image'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, category, id }),
-      });
-      if (!r.ok) {
+      const { ok, data } = await apiFetch('/api/generate-image', { method: 'POST', body: { id } });
+      if (!ok || !data?.image) {
         onUpdateOffer?.(id, { generatingImage: false });
         return;
       }
-      const data = await r.json();
       onUpdateOffer?.(id, { image: data.image, generatingImage: false });
     } catch {
       onUpdateOffer?.(id, { generatingImage: false });
@@ -210,7 +206,6 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
       showPaywall();
       return;
     }
-    const { description } = form;
     const payload = {
       description: form.description,
       price: Number(form.price),
@@ -229,7 +224,7 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
     }
     const id = typeof result === 'string' ? result : null;
     if (id && onUpdateOffer) {
-      generateImage(id, description, 'Other');
+      generateImage(id);
     }
   }
 

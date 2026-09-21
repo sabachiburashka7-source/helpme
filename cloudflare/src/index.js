@@ -18,6 +18,12 @@
 //   GET    /delete-account  /api/delete-account
 // Plus one new route that replaces Supabase Storage:
 //   GET    /api/image/<id>.png    generated illustrations, served from KV
+//
+// Who is calling: verify_code returns a session `token`, and every other
+// request sends it as `Authorization: Bearer <token>`. The caller's phone is
+// read from the session, never from the body, and offers can only be changed
+// by their owner. See "Who is asking" below, including the short legacy
+// window for builds 11/12, which predate tokens.
 
 // These are plain .html files, pulled in as strings by the "Text" rule in
 // wrangler.jsonc. Edit them as normal HTML - no escaping needed.
@@ -49,6 +55,49 @@ const REPORT_REASONS = new Set([
   'illegal',
   'other',
 ]);
+
+// Photos attached to a request, as the app's picker allows.
+const MAX_OFFER_IMAGES = 6;
+
+/* ------------------------------------------------------------------ *
+ * Who is asking
+ *
+ * Signing in (send_code + verify_code) proves someone owns a phone number.
+ * verify_code then hands the app a random session token, and every request
+ * that reads private data or changes anything must send it back as
+ * `Authorization: Bearer <token>`. The caller's phone number comes from that
+ * session - never from the request body, which anyone can fill in.
+ * ------------------------------------------------------------------ */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// A session nobody has used for this long is dropped, and the app asks the
+// person to sign in again.
+const SESSION_IDLE_DAYS = 180;
+
+// Builds 11 and 12 were released before session tokens and never send one.
+// Until this moment they may still load the feed, and post, illustrate and
+// delete their own requests the old way - but only for accounts that have
+// never used a token (see acceptsLegacy). After it, a request without a
+// token is refused and those builds have to update. A LEGACY_WRITES_UNTIL
+// variable (ISO date) on the Worker overrides this, e.g. to end it sooner.
+const LEGACY_WRITES_UNTIL = '2026-10-01T00:00:00Z';
+
+// Oldest build allowed to use the API. The app sends its build number in
+// X-Kheli-Build; anything older gets 426 and an "update Kheli" prompt.
+// Raise this to force everyone onto a newer build.
+const MIN_BUILD = 13;
+
+// The TEST_PHONE code is checked here rather than by Twilio, so nothing else
+// limits how many guesses someone gets at it. Wrong guesses are counted per
+// network (an IPv4 address, or an IPv6 /64) and in total.
+const TEST_OTP_FAILS_PER_NETWORK = 10; // per 15 minutes
+const TEST_OTP_FAILS_TOTAL = 100; // per hour
+
+// The shared reviewer account posts without the monthly cap, but not without
+// any cap: if its code leaks, this is what stops it turning into unlimited
+// illustrations billed to our OpenAI key.
+const REVIEWER_POSTS_PER_DAY = 10;
 
 // The six secrets are pre-created in the dashboard with this placeholder so
 // the rows exist and can be edited without retyping their names. Until a real
@@ -96,7 +145,8 @@ function effectiveTier(row) {
 // The TEST_PHONE account is shared: Google's reviewers and every paid closed
 // tester sign in as it, because none of them can receive a Georgian SMS. A
 // 3-posts-a-month cap on one shared account is spent by the first tester and
-// blocks everyone after them, so that phone posts without any quota.
+// blocks everyone after them, so that phone skips the monthly quota (it has
+// a daily ceiling instead - see REVIEWER_POSTS_PER_DAY).
 function isReviewerPhone(env, phone) {
   const testPhone = normalizePhone(secret(env && env.TEST_PHONE));
   if (!testPhone) return false;
@@ -191,6 +241,236 @@ async function readJson(request) {
   }
 }
 
+// Enough of a number to tell log lines apart, not enough to be the number.
+function maskPhone(phone) {
+  return phone ? `${phone.slice(0, 4)}...${phone.slice(-3)}` : '';
+}
+
+function initials(name) {
+  return (name || '?').slice(0, 2).toUpperCase();
+}
+
+const IMAGE_DATA_URL = /^data:image\/[a-z0-9.+-]+;base64,/i;
+
+function isImageDataUrl(value) {
+  return typeof value === 'string' && IMAGE_DATA_URL.test(value);
+}
+
+// The app's picker produces data: URLs. Anything else - a link to some
+// other server - would make every viewer's phone fetch it, so it is dropped.
+function sanitizeImages(images) {
+  return Array.isArray(images) ? images.filter(isImageDataUrl).slice(0, MAX_OFFER_IMAGES) : [];
+}
+
+async function countOffersSince(db, phone, sinceIso) {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM offers WHERE phone = ? AND created_at >= ?')
+    .bind(phone, sinceIso)
+    .first();
+  return row ? Number(row.n) : 0;
+}
+
+async function deleteIllustration(env, offerId) {
+  if (!env.IMAGES || !offerId) return;
+  const safeId = String(offerId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  try {
+    await env.IMAGES.delete(safeId);
+  } catch (err) {
+    console.error('[image] delete failed', safeId, err && err.message);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Sessions
+ * ------------------------------------------------------------------ */
+
+function bytesToBase64Url(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Looks at every character whatever happens, so the response time says
+// nothing about how much of a guess was right.
+function sameSecret(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  let diff = a.length ^ b.length;
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) | 0) ^ (b.charCodeAt(i) | 0);
+  return diff === 0;
+}
+
+// 401 with a code: the app signs the person out on `session_invalid`, which
+// it must not do for the other 401 this API sends (a wrong SMS code).
+function sessionInvalid() {
+  return json({ error: 'Please sign in again.', code: 'session_invalid' }, 401);
+}
+
+// For builds too old for the API, and for requests without a session token
+// once the legacy window is over. Builds 11/12 show `error` as it is, so it
+// carries the app's default language as well as English.
+function updateRequired() {
+  return json(
+    {
+      error: 'განაახლეთ Kheli Google Play-დან. / Please update Kheli from Google Play.',
+      code: 'update_required',
+    },
+    426
+  );
+}
+
+function bearerToken(request) {
+  const match = /^Bearer\s+(\S+)\s*$/i.exec(request.headers.get('Authorization') || '');
+  return match ? match[1] : '';
+}
+
+// The raw token goes to the app once; only its SHA-256 is stored, so reading
+// the sessions table does not let anyone act as a user.
+async function createSession(db, phone) {
+  const token = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  // Housekeeping rides along with sign-ins: sessions idle past the limit,
+  // and failure counts nobody will look at again.
+  const idleCutoff = new Date(Date.now() - SESSION_IDLE_DAYS * DAY_MS).toISOString();
+  const failureCutoff = new Date(Date.now() - DAY_MS).toISOString();
+  await db.batch([
+    db
+      .prepare('INSERT INTO sessions (token_hash, phone, created_at, last_used_at) VALUES (?, ?, ?, NULL)')
+      .bind(await sha256Hex(token), phone, nowIso()),
+    db.prepare('DELETE FROM sessions WHERE COALESCE(last_used_at, created_at) < ?').bind(idleCutoff),
+    db.prepare('DELETE FROM auth_failures WHERE created_at < ?').bind(failureCutoff),
+  ]);
+  return token;
+}
+
+// The live session behind a bearer token, or null if it is unknown or has
+// sat idle too long.
+async function findSession(db, token) {
+  if (!token || token.length > 256) return null;
+  const hash = await sha256Hex(token);
+  const row = await db
+    .prepare('SELECT token_hash, phone, created_at, last_used_at FROM sessions WHERE token_hash = ?')
+    .bind(hash)
+    .first();
+  if (!row) return null;
+  if (!(Date.now() - Date.parse(row.last_used_at || row.created_at) < SESSION_IDLE_DAYS * DAY_MS)) {
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(hash).run();
+    return null;
+  }
+  // One write a day keeps the idle clock honest. The first one also marks
+  // this phone as being on a build that sends tokens (see acceptsLegacy).
+  if (!row.last_used_at || Date.now() - Date.parse(row.last_used_at) > DAY_MS) {
+    await db
+      .prepare('UPDATE sessions SET last_used_at = ? WHERE token_hash = ?')
+      .bind(nowIso(), hash)
+      .run();
+  }
+  return row;
+}
+
+// { phone, session } for a valid token; { phone: null } when no token was
+// sent at all; { response } when a token was sent but is no good - return
+// that response as it is.
+async function resolveCaller(request, env) {
+  const token = bearerToken(request);
+  if (!token) return { phone: null, session: null };
+  const session = await findSession(env.DB, token);
+  if (!session) return { response: sessionInvalid() };
+  return { phone: session.phone, session };
+}
+
+function legacyWindowOpen(env) {
+  const until = Date.parse(secret(env && env.LEGACY_WRITES_UNTIL) || LEGACY_WRITES_UNTIL);
+  return Number.isFinite(until) && Date.now() < until;
+}
+
+// Whether a request without a token may still act for `phone`, the way
+// builds 11/12 do. Only inside the legacy window, only for a real account,
+// and never once that account has used a token: from then on it is on a
+// build that sends one, so a token-less request for it can only be forged.
+async function acceptsLegacy(env, phone) {
+  if (!phone || !legacyWindowOpen(env)) return false;
+  const row = await env.DB
+    .prepare(
+      `SELECT EXISTS (SELECT 1 FROM users WHERE phone = ?) AS has_account,
+              EXISTS (SELECT 1 FROM sessions
+                       WHERE phone = ? AND last_used_at IS NOT NULL) AS upgraded`
+    )
+    .bind(phone, phone)
+    .first();
+  return Boolean(row && row.has_account && !row.upgraded);
+}
+
+// null when `caller` may change `offer`, otherwise the response refusing it.
+async function refuseUnlessOwner(env, caller, offer) {
+  const owner = normalizePhone(offer.phone);
+  if (caller.phone) {
+    if (owner && owner === caller.phone) return null;
+    return json({ error: 'You can only change your own requests' }, 403);
+  }
+  // Builds 11/12 send only the offer id here - no token, not even a phone.
+  // Inside the legacy window that still works for owners who have never
+  // used a token, which is the trust those builds always had.
+  if (await acceptsLegacy(env, owner)) {
+    console.log('[legacy] change offer', offer.id, maskPhone(owner));
+    return null;
+  }
+  return updateRequired();
+}
+
+/* ------------------------------------------------------------------ *
+ * Guess limit for the TEST_PHONE code
+ * ------------------------------------------------------------------ */
+
+// An IPv6 subscriber usually holds a whole /64, so guesses are counted per
+// /64 - otherwise one phone could rotate through millions of addresses.
+function networkOf(ip) {
+  if (!ip) return 'unknown';
+  const v4 = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(ip);
+  if (v4) return v4[1];
+  const [head, tail = ''] = ip.split('::');
+  const h = head ? head.split(':') : [];
+  const t = tail ? tail.split(':') : [];
+  const groups = [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t];
+  return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
+
+// Stored hashed: enough to count guesses from one network, not to say who.
+async function failureKey(request) {
+  const network = networkOf(request.headers.get('CF-Connecting-IP') || '');
+  return `net:${(await sha256Hex(`kheli-otp|${network}`)).slice(0, 32)}`;
+}
+
+async function testOtpBlocked(db, key) {
+  const row = await db
+    .prepare(
+      `SELECT (SELECT COUNT(*) FROM auth_failures WHERE key = ? AND created_at >= ?) AS here,
+              (SELECT COUNT(*) FROM auth_failures WHERE key = 'test-otp' AND created_at >= ?) AS total`
+    )
+    .bind(
+      key,
+      new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    )
+    .first();
+  return (
+    Number((row && row.here) || 0) >= TEST_OTP_FAILS_PER_NETWORK ||
+    Number((row && row.total) || 0) >= TEST_OTP_FAILS_TOTAL
+  );
+}
+
+async function recordTestOtpFailure(db, key) {
+  const now = nowIso();
+  await db.batch([
+    db.prepare('INSERT INTO auth_failures (key, created_at) VALUES (?, ?)').bind(key, now),
+    db.prepare("INSERT INTO auth_failures (key, created_at) VALUES ('test-otp', ?)").bind(now),
+  ]);
+}
+
 /* ------------------------------------------------------------------ *
  * /api/auth
  * ------------------------------------------------------------------ */
@@ -212,7 +492,8 @@ async function handleAuth(request, env) {
     const auth = btoa(`${twilioSid}:${twilioToken}`);
     const body = new URLSearchParams(params).toString();
     const fullUrl = `https://verify.twilio.com/v2/Services/${twilioVerifySid}${path}`;
-    console.log('[auth] twilio ->', fullUrl, JSON.stringify(params));
+    // The path only: params hold the number and, on a check, the SMS code.
+    console.log('[auth] twilio ->', path);
     const r = await fetch(fullUrl, {
       method: 'POST',
       headers: {
@@ -222,9 +503,9 @@ async function handleAuth(request, env) {
       body,
     });
     const text = await r.text();
-    console.log('[auth] twilio <-', r.status, text.slice(0, 400));
     let data;
     try { data = JSON.parse(text); } catch { data = { message: text }; }
+    console.log('[auth] twilio <-', r.status, r.ok ? data?.status || '' : data?.message || '');
     return { ok: r.ok, status: r.status, data };
   }
 
@@ -239,64 +520,35 @@ async function handleAuth(request, env) {
         `INSERT INTO users (id, phone, name, profile_image, tier, subscription_expires_at, created_at)
          VALUES (?, ?, ?, ?, 'free', NULL, ?)`
       )
-      .bind(id, phone, name, profileImage || null, nowIso())
+      .bind(id, phone, name, isImageDataUrl(profileImage) ? profileImage : null, nowIso())
       .run();
     return findUser(phone);
   }
 
+  // The one place a session is born: the phone has just been proven.
+  async function signedIn(row, status = 200) {
+    const token = await createSession(db, row.phone);
+    return json({ ...shapeUser(row, env), token }, status);
+  }
+
   const body = await readJson(request);
   const { action, phone, code, intent, name, profile_image } = body;
+
+  // Everything except signing in acts on an existing account, so it needs
+  // the session token from verify_code. A phone in the body is ignored.
+  if (ACCOUNT_ACTIONS.has(action)) {
+    const caller = await resolveCaller(request, env);
+    if (caller.response) return caller.response;
+    if (!caller.phone) {
+      if (action === 'logout') return json({ ok: true }); // nothing to revoke
+      // Only builds 11/12 send these without a token. Old enough that they
+      // must not be able to delete or change an account any more.
+      return updateRequired();
+    }
+    return handleAccountAction(action, caller, body, env);
+  }
+
   const cleanPhone = normalizePhone(phone);
-
-  if (action === 'delete_account') {
-    if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
-      return json({ error: 'Enter a valid phone number' }, 400);
-    }
-    // Remove all offers this user has posted, then the user row itself.
-    // Offers go first so a row never lingers without an owner.
-    await db
-      .prepare('DELETE FROM reports WHERE offer_id IN (SELECT id FROM offers WHERE phone = ?)')
-      .bind(cleanPhone)
-      .run();
-    await db.prepare('DELETE FROM offers WHERE phone = ?').bind(cleanPhone).run();
-    // Deleting the account has to take the reports this person filed and the
-    // blocks either side of them, or a "delete everything about me" promise
-    // leaves their number sitting in someone else's block list.
-    await db.prepare('DELETE FROM reports WHERE reporter_phone = ?').bind(cleanPhone).run();
-    await db
-      .prepare('DELETE FROM blocks WHERE blocker_phone = ? OR blocked_phone = ?')
-      .bind(cleanPhone, cleanPhone)
-      .run();
-    await db.prepare('DELETE FROM users WHERE phone = ?').bind(cleanPhone).run();
-    return json({ ok: true });
-  }
-
-  if (action === 'cancel_subscription') {
-    // Phase 1: manual / test downgrade. When Google Play Billing is live the
-    // app deep-links to Google's "Manage subscription" screen instead - and
-    // Google's RTDN webhook is what flips tier='free' here, not this action.
-    if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
-      return json({ error: 'Enter a valid phone number' }, 400);
-    }
-    await db
-      .prepare(`UPDATE users SET tier = 'free', subscription_expires_at = NULL WHERE phone = ?`)
-      .bind(cleanPhone)
-      .run();
-    const row = await findUser(cleanPhone);
-    if (!row) return json({ error: 'No account found' }, 404);
-    return json(shapeUser(row, env));
-  }
-
-  if (action === 'me') {
-    // Lightweight "who am I" used on app start to refresh the locally cached
-    // user (tier may have changed since last login).
-    if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
-      return json({ error: 'Enter a valid phone number' }, 400);
-    }
-    const row = await findUser(cleanPhone);
-    if (!row) return json({ error: 'No account found' }, 404);
-    return json(shapeUser(row, env));
-  }
 
   // Play Store review bypass: lets Google's reviewers (and our paid closed
   // testers, who cannot receive a Georgian SMS) log in without an SMS.
@@ -305,32 +557,6 @@ async function handleAuth(request, env) {
   const testPhone = normalizePhone(secret(env.TEST_PHONE));
   const testOtp = secret(env.TEST_OTP);
   const isTestPhone = Boolean(testPhone && testOtp && cleanPhone === testPhone);
-
-  if (action === 'update_profile_image') {
-    if (!cleanPhone || cleanPhone.replace('+', '').length < 6) {
-      return json({ error: 'Enter a valid phone number' }, 400);
-    }
-    if (typeof profile_image !== 'string' && profile_image !== null) {
-      return json({ error: 'Invalid profile image' }, 400);
-    }
-    await db
-      .prepare('UPDATE users SET profile_image = ? WHERE phone = ?')
-      .bind(profile_image, cleanPhone)
-      .run();
-    const row = await findUser(cleanPhone);
-    if (!row) return json({ error: 'User not found' }, 404);
-
-    // Best-effort: propagate the new image to all of this user's existing
-    // offers so the avatar in Browse reflects the change without a repost.
-    try {
-      await db
-        .prepare('UPDATE offers SET profile_image = ? WHERE phone = ?')
-        .bind(profile_image, cleanPhone)
-        .run();
-    } catch {}
-
-    return json(shapeUser(row, env));
-  }
 
   if (!isE164(cleanPhone)) {
     return json(
@@ -390,18 +616,24 @@ async function handleAuth(request, env) {
 
     if (isTestPhone) {
       console.log('[auth] test-phone verify_code bypass');
-      if (code.trim() !== testOtp) {
+      // Twilio caps guesses at a real code; nothing caps them here but this.
+      const guessKey = await failureKey(request);
+      if (await testOtpBlocked(db, guessKey)) {
+        return json({ error: 'Too many attempts. Wait a few minutes and try again.' }, 429);
+      }
+      if (!sameSecret(code.trim(), testOtp)) {
+        await recordTestOtpFailure(db, guessKey);
         return json({ error: 'Incorrect or expired code' }, 401);
       }
       // Ensure-or-fetch: works for both register and login so a reviewer can
       // hit either flow without server-state coordination.
       const existingRow = await findUser(cleanPhone);
       if (existingRow) {
-        return json(shapeUser(existingRow, env));
+        return signedIn(existingRow);
       }
       const cleanName = (typeof name === 'string' && name.trim()) || 'Play Store Reviewer';
       const created = await createUser(cleanPhone, cleanName, profile_image);
-      return json(shapeUser(created, env), wantsRegister ? 201 : 200);
+      return signedIn(created, wantsRegister ? 201 : 200);
     }
 
     const checked = await twilioVerify('/VerificationCheck', {
@@ -424,13 +656,93 @@ async function handleAuth(request, env) {
         return json({ error: 'An account with this phone already exists' }, 409);
       }
       const created = await createUser(cleanPhone, cleanName, profile_image);
-      return json(shapeUser(created, env), 201);
+      return signedIn(created, 201);
     }
 
     // login
     const row = await findUser(cleanPhone);
     if (!row) return json({ error: 'No account found for this number' }, 404);
+    return signedIn(row);
+  }
+
+  return json({ error: 'Unknown action' }, 400);
+}
+
+// /api/auth actions that act on the caller's own account.
+const ACCOUNT_ACTIONS = new Set([
+  'me',
+  'logout',
+  'delete_account',
+  'cancel_subscription',
+  'update_profile_image',
+]);
+
+async function handleAccountAction(action, caller, body, env) {
+  const db = env.DB;
+  const phone = caller.phone;
+
+  if (action === 'logout') {
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(caller.session.token_hash).run();
+    return json({ ok: true });
+  }
+
+  if (action === 'delete_account') {
+    // Illustrations first, while the offer rows still say which are theirs.
+    const { results: owned } = await db
+      .prepare('SELECT id FROM offers WHERE phone = ?')
+      .bind(phone)
+      .all();
+    await Promise.all((owned || []).map((o) => deleteIllustration(env, o.id)));
+    // One transaction. Deleting the account has to take the reports this
+    // person filed and the blocks either side of them, or a "delete
+    // everything about me" promise leaves their number in someone else's
+    // block list - and it signs out every device on the account.
+    await db.batch([
+      db.prepare('DELETE FROM reports WHERE offer_id IN (SELECT id FROM offers WHERE phone = ?)').bind(phone),
+      db.prepare('DELETE FROM offers WHERE phone = ?').bind(phone),
+      db.prepare('DELETE FROM reports WHERE reporter_phone = ?').bind(phone),
+      db.prepare('DELETE FROM blocks WHERE blocker_phone = ? OR blocked_phone = ?').bind(phone, phone),
+      db.prepare('DELETE FROM users WHERE phone = ?').bind(phone),
+      db.prepare('DELETE FROM sessions WHERE phone = ?').bind(phone),
+    ]);
+    console.log('[auth] account deleted', maskPhone(phone));
+    return json({ ok: true });
+  }
+
+  const row = await db.prepare('SELECT * FROM users WHERE phone = ?').bind(phone).first();
+  // The account went away underneath the session (removed straight from the
+  // database). The app signs out and the person can register again.
+  if (!row) return sessionInvalid();
+
+  if (action === 'me') {
+    // Lightweight "who am I" used on app start to refresh the locally cached
+    // user (tier may have changed since last login).
     return json(shapeUser(row, env));
+  }
+
+  if (action === 'cancel_subscription') {
+    // Phase 1: manual / test downgrade. When Google Play Billing is live the
+    // app deep-links to Google's "Manage subscription" screen instead - and
+    // Google's RTDN webhook is what flips tier='free' here, not this action.
+    await db
+      .prepare(`UPDATE users SET tier = 'free', subscription_expires_at = NULL WHERE phone = ?`)
+      .bind(phone)
+      .run();
+    return json(shapeUser({ ...row, tier: 'free', subscription_expires_at: null }, env));
+  }
+
+  if (action === 'update_profile_image') {
+    const image = body.profile_image ?? null;
+    if (image !== null && !isImageDataUrl(image)) {
+      return json({ error: 'Invalid profile image' }, 400);
+    }
+    // The avatar on their existing offers follows, so Browse shows the new
+    // photo without a repost.
+    await db.batch([
+      db.prepare('UPDATE users SET profile_image = ? WHERE phone = ?').bind(image, phone),
+      db.prepare('UPDATE offers SET profile_image = ? WHERE phone = ?').bind(image, phone),
+    ]);
+    return json(shapeUser({ ...row, profile_image: image }, env));
   }
 
   return json({ error: 'Unknown action' }, 400);
@@ -444,11 +756,17 @@ async function handleOffers(request, env) {
   const db = env.DB;
   if (!db) return json({ error: 'Database not configured' }, 500);
 
+  const caller = await resolveCaller(request, env);
+  if (caller.response) return caller.response;
+
   if (request.method === 'GET') {
-    // `?phone=` is the viewer. Old clients (build 11 and earlier) omit it and
-    // simply get no block filtering - they have no block UI. Auto-hiding
-    // applies either way, so those installs get the safety win too.
-    const viewer = normalizePhone(new URL(request.url).searchParams.get('phone'));
+    // The viewer is whoever the session belongs to. Builds 11/12 read the
+    // feed without one until the legacy window closes; their `?phone=` is
+    // not trusted, so they get the public feed with no per-viewer filtering
+    // (auto-hiding still applies). Afterwards the feed - which carries every
+    // poster's number for the call button - is for signed-in people only.
+    if (!caller.phone && !legacyWindowOpen(env)) return updateRequired();
+    const viewer = caller.phone || '';
 
     // Four things happen in one statement so the feed stays a single round
     // trip: count reports per offer, drop offers by people the viewer has
@@ -486,34 +804,41 @@ async function handleOffers(request, env) {
 
   if (request.method === 'POST') {
     const body = await readJson(request);
-    const {
-      description, price, location, category, name, avatar, phone,
-      latitude, longitude, profile_image, images,
-    } = body;
+    const { description, price, location, category, latitude, longitude, images } = body;
 
-    // Quota check: look up the user's tier, then count posts since the start
-    // of the current UTC month. Tampered clients are caught here. A missing
-    // phone falls back to free tier (kept from the Vercel version so the
-    // endpoint stays debuggable).
-    if (typeof phone === 'string' && phone && !isReviewerPhone(env, phone)) {
-      const userRow = await db
-        .prepare('SELECT tier, subscription_expires_at FROM users WHERE phone = ?')
-        .bind(phone)
-        .first();
-      const tier = effectiveTier(userRow);
+    let phone = caller.phone;
+    if (!phone) {
+      const claimed = normalizePhone(body.phone);
+      if (!(await acceptsLegacy(env, claimed))) return updateRequired();
+      phone = claimed;
+      console.log('[legacy] post', maskPhone(phone));
+    }
+
+    // Name, initials and photo come from the account, not the request, so a
+    // post cannot go up under somebody else's name either.
+    const account = await db
+      .prepare('SELECT name, profile_image, tier, subscription_expires_at FROM users WHERE phone = ?')
+      .bind(phone)
+      .first();
+    if (!account) return sessionInvalid();
+
+    // Quota: the reviewer account gets a daily ceiling instead of the monthly
+    // cap; everyone else counts posts since the start of the UTC month.
+    if (isReviewerPhone(env, phone)) {
+      const used = await countOffersSince(db, phone, new Date(Date.now() - DAY_MS).toISOString());
+      if (used >= REVIEWER_POSTS_PER_DAY) {
+        return json({ error: 'quota_exceeded', tier: 'free', limit: REVIEWER_POSTS_PER_DAY, used }, 402);
+      }
+    } else {
+      const tier = effectiveTier(account);
       const limit = POST_QUOTA[tier] ?? POST_QUOTA.free;
-      const monthStart = startOfMonthUtcIso();
-      const countRow = await db
-        .prepare('SELECT COUNT(*) AS n FROM offers WHERE phone = ? AND created_at >= ?')
-        .bind(phone, monthStart)
-        .first();
-      const usedThisMonth = countRow ? Number(countRow.n) : 0;
-
-      if (usedThisMonth >= limit) {
-        return json({ error: 'quota_exceeded', tier, limit, used: usedThisMonth }, 402);
+      const used = await countOffersSince(db, phone, startOfMonthUtcIso());
+      if (used >= limit) {
+        return json({ error: 'quota_exceeded', tier, limit, used }, 402);
       }
     }
 
+    const photos = sanitizeImages(images);
     const id = crypto.randomUUID();
     const createdAt = nowIso();
     await db
@@ -529,13 +854,13 @@ async function handleOffers(request, env) {
         typeof price === 'number' ? price : price != null ? Number(price) : null,
         location ?? null,
         category ?? null,
-        name ?? null,
-        avatar ?? null,
-        phone ?? null,
+        account.name ?? null,
+        initials(account.name),
+        phone,
         typeof latitude === 'number' ? latitude : null,
         typeof longitude === 'number' ? longitude : null,
-        typeof profile_image === 'string' && profile_image ? profile_image : null,
-        Array.isArray(images) && images.length > 0 ? JSON.stringify(images) : null,
+        account.profile_image || null,
+        photos.length > 0 ? JSON.stringify(photos) : null,
         createdAt
       )
       .run();
@@ -547,30 +872,29 @@ async function handleOffers(request, env) {
   if (request.method === 'DELETE') {
     const { id } = await readJson(request);
     if (!id) return json({ error: 'Missing id' }, 400);
-    // Reports first: ids are UUIDs so they are never reused, but leaving
+    const offer = await db.prepare('SELECT id, phone FROM offers WHERE id = ?').bind(id).first();
+    if (!offer) return json({ error: 'Offer not found' }, 404);
+    const refused = await refuseUnlessOwner(env, caller, offer);
+    if (refused) return refused;
+    await deleteIllustration(env, offer.id);
+    // Reports go too: ids are UUIDs so they are never reused, but leaving
     // orphans behind would slowly bloat the table the feed query counts.
-    await db.prepare('DELETE FROM reports WHERE offer_id = ?').bind(id).run();
-    await db.prepare('DELETE FROM offers WHERE id = ?').bind(id).run();
+    await db.batch([
+      db.prepare('DELETE FROM reports WHERE offer_id = ?').bind(offer.id),
+      db.prepare('DELETE FROM offers WHERE id = ?').bind(offer.id),
+    ]);
     return json({ ok: true });
   }
 
-  if (request.method === 'PATCH') {
-    const body = await readJson(request);
-    const { id, ...patch } = body;
-    if (!id) return json({ error: 'Missing id' }, 400);
-    const updated = await patchOffer(db, id, patch);
-    if (updated.error) return json({ error: updated.error }, updated.status || 400);
-    return json({ ok: true });
-  }
+  if (request.method === 'PATCH') return patchOfferRequest(request, env, caller);
 
   return json({ error: 'Method not allowed' }, 405);
 }
 
-// Shared by PATCH /api/offers and PATCH /api/update-offer. Only columns that
-// actually exist are writable, so a stray key can't break the statement.
+// What an owner may edit. Who posted it (name, initials, photo, phone) and
+// the illustration are the server's to set, never the request's.
 const PATCHABLE_OFFER_COLUMNS = new Set([
-  'description', 'price', 'location', 'category', 'name', 'avatar',
-  'latitude', 'longitude', 'profile_image', 'images', 'image',
+  'description', 'price', 'location', 'category', 'latitude', 'longitude', 'images',
 ]);
 
 async function patchOffer(db, id, patch) {
@@ -580,7 +904,8 @@ async function patchOffer(db, id, patch) {
     if (!PATCHABLE_OFFER_COLUMNS.has(key)) continue;
     sets.push(`${key} = ?`);
     if (key === 'images') {
-      values.push(Array.isArray(value) ? JSON.stringify(value) : value ?? null);
+      const photos = sanitizeImages(value);
+      values.push(photos.length > 0 ? JSON.stringify(photos) : null);
     } else {
       values.push(value ?? null);
     }
@@ -591,17 +916,34 @@ async function patchOffer(db, id, patch) {
   return { ok: true };
 }
 
+// Shared by PATCH /api/offers and PATCH /api/update-offer.
+async function patchOfferRequest(request, env, caller) {
+  const { id, ...patch } = await readJson(request);
+  if (!id) return json({ error: 'Missing id' }, 400);
+  if (!caller.phone) {
+    // Builds 11/12 only ever PATCH `image`, straight after generate-image -
+    // which now saves that URL itself. Nothing is left to do, and nothing a
+    // forged request could change.
+    if (!legacyWindowOpen(env)) return updateRequired();
+    return json({ ok: true });
+  }
+  const offer = await env.DB.prepare('SELECT id, phone FROM offers WHERE id = ?').bind(id).first();
+  if (!offer) return json({ error: 'Offer not found' }, 404);
+  const refused = await refuseUnlessOwner(env, caller, offer);
+  if (refused) return refused;
+  const updated = await patchOffer(env.DB, offer.id, patch);
+  if (updated.error) return json({ error: updated.error }, updated.status || 400);
+  return json({ ok: true });
+}
+
 async function handleUpdateOffer(request, env) {
   if (request.method !== 'PATCH') {
     return json({ error: 'Method not allowed' }, 405);
   }
-  const db = env.DB;
-  if (!db) return json({ error: 'Database not configured' }, 500);
-  const { id, ...patch } = await readJson(request);
-  if (!id) return json({ error: 'Missing id' }, 400);
-  const updated = await patchOffer(db, id, patch);
-  if (updated.error) return json({ error: updated.error }, updated.status || 400);
-  return json({ ok: true });
+  if (!env.DB) return json({ error: 'Database not configured' }, 500);
+  const caller = await resolveCaller(request, env);
+  if (caller.response) return caller.response;
+  return patchOfferRequest(request, env, caller);
 }
 
 /* ------------------------------------------------------------------ *
@@ -619,18 +961,25 @@ async function handleReport(request, env) {
   const db = env.DB;
   if (!db) return json({ error: 'Database not configured' }, 500);
 
+  // Reports decide what gets hidden from everyone, so each one has to come
+  // from a real, signed-in person. Only token builds have a Report button.
+  const caller = await resolveCaller(request, env);
+  if (caller.response) return caller.response;
+  if (!caller.phone) return updateRequired();
+
   const body = await readJson(request);
   // Accept both spellings: the app sends snake_case like every other route,
   // but camelCase is the obvious thing to reach for from a REST client.
   const offerId = body.offer_id || body.offerId;
-  const reporterPhone = normalizePhone(body.reporter_phone || body.reporterPhone);
-  const reporterId = body.reporter_id || body.reporterUserId || null;
+  const reporterPhone = caller.phone;
   const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
   const details = typeof body.details === 'string' ? body.details.trim().slice(0, 1000) : null;
 
   if (!offerId) return json({ error: 'Missing offer_id' }, 400);
-  if (!reporterPhone) return json({ error: 'Missing reporter_phone' }, 400);
   if (!REPORT_REASONS.has(reason)) return json({ error: 'Unknown reason' }, 400);
+
+  const reporter = await db.prepare('SELECT id FROM users WHERE phone = ?').bind(reporterPhone).first();
+  const reporterId = reporter ? reporter.id : null;
 
   const offer = await db
     .prepare('SELECT id, phone FROM offers WHERE id = ?')
@@ -681,10 +1030,15 @@ async function handleBlocks(request, env) {
   const db = env.DB;
   if (!db) return json({ error: 'Database not configured' }, 500);
 
-  // GET /api/blocks?phone=... - the list behind Profile > Blocked people.
+  // Whose block list this is comes from the session, never from the request:
+  // the list is private, and changing it is changing someone's feed.
+  const caller = await resolveCaller(request, env);
+  if (caller.response) return caller.response;
+  if (!caller.phone) return updateRequired();
+  const blocker = caller.phone;
+
+  // GET /api/blocks - the list behind Profile > Blocked people.
   if (request.method === 'GET') {
-    const blocker = normalizePhone(new URL(request.url).searchParams.get('phone'));
-    if (!blocker) return json({ error: 'Missing phone' }, 400);
     // A bare phone number is not a useful thing to show in a list, so pull a
     // name: the account's if they still have one, otherwise the name on
     // their most recent offer.
@@ -713,11 +1067,8 @@ async function handleBlocks(request, env) {
 
   if (request.method === 'POST' || request.method === 'DELETE') {
     const body = await readJson(request);
-    const blocker = normalizePhone(body.blocker_phone || body.blockerPhone);
     let blocked = normalizePhone(body.blocked_phone || body.blockedPhone);
     const offerId = body.offer_id || body.offerId;
-
-    if (!blocker) return json({ error: 'Missing blocker_phone' }, 400);
 
     // Blocking from a listing: the app knows the offer, not the owner's
     // number, so let it pass the offer id and resolve the owner here.
@@ -770,6 +1121,28 @@ async function handleGenerateImage(request, env) {
     return json({ error: 'Method not allowed' }, 405);
   }
 
+  const db = env.DB;
+  if (!db) return json({ error: 'Database not configured' }, 500);
+
+  const caller = await resolveCaller(request, env);
+  if (caller.response) return caller.response;
+
+  const { id } = await readJson(request);
+  if (!id) {
+    return json({ error: 'id is required' }, 400);
+  }
+  const offer = await db
+    .prepare('SELECT id, phone, description, category, image FROM offers WHERE id = ?')
+    .bind(id)
+    .first();
+  if (!offer) return json({ error: 'Offer not found' }, 404);
+  const refused = await refuseUnlessOwner(env, caller, offer);
+  if (refused) return refused;
+
+  // One illustration per request, ever: asking again hands back the same
+  // picture instead of paying for another, or swapping in a different one.
+  if (offer.image) return json({ image: offer.image });
+
   const apiKey = secret(env.OPENAI_API_KEY);
   if (!apiKey) {
     return json({ error: 'OPENAI_API_KEY not configured on server' }, 500);
@@ -778,13 +1151,12 @@ async function handleGenerateImage(request, env) {
     return json({ error: 'Image storage not configured' }, 500);
   }
 
-  const { description, category, id } = await readJson(request);
-  if (!description || typeof description !== 'string') {
+  // Drawn from what was actually posted, not from anything in this request.
+  const description = typeof offer.description === 'string' ? offer.description.trim() : '';
+  if (!description) {
     return json({ error: 'description is required' }, 400);
   }
-  if (!id) {
-    return json({ error: 'id is required' }, 400);
-  }
+  const category = offer.category;
 
   const safeDescription = description.slice(0, 500);
   const safeCategory = typeof category === 'string' ? category.slice(0, 50) : 'service';
@@ -828,12 +1200,15 @@ async function handleGenerateImage(request, env) {
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeId = String(offer.id).replace(/[^a-zA-Z0-9_-]/g, '_');
     await env.IMAGES.put(safeId, bytes, {
       metadata: { contentType: 'image/png', createdAt: nowIso() },
     });
 
+    // Saved here rather than by a follow-up PATCH from the app, which is no
+    // longer allowed to set it.
     const publicUrl = `${new URL(request.url).origin}/api/image/${safeId}.png`;
+    await db.prepare('UPDATE offers SET image = ? WHERE id = ?').bind(publicUrl, offer.id).run();
     return json({ image: publicUrl });
   } catch (err) {
     console.error('generate-image exception', err && err.message);
@@ -878,9 +1253,18 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Kheli-Build',
         },
       });
+    }
+
+    // Builds from 13 on say which build they are. Anything below MIN_BUILD is
+    // told to update before it gets anywhere - pictures excepted, so an old
+    // screen still draws. Builds 11/12 send no number at all; the legacy
+    // rules in each handler deal with them.
+    const build = Number(request.headers.get('X-Kheli-Build')) || 0;
+    if (build && build < MIN_BUILD && path.startsWith('/api/') && !path.startsWith('/api/image/')) {
+      return updateRequired();
     }
 
     try {
