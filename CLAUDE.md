@@ -411,6 +411,40 @@ the declared values and verifying with the two calls above. Nothing in the
 Play Console declaration needed changing — the instructions there were already
 correct and specific. Re-submitted for review the same day.
 
+### Production data wiped 2026-09-21 (clean slate for the public launch)
+
+The owner reported the app live on the Play Store on 2026-09-21 and asked for
+every old post and account to go. Deleted from the live backend, no app update
+needed: all rows in `users` (3), `offers` (24), `reports` (0) and `blocks` (0),
+plus all 22 PNGs in the `IMAGES` KV. All of it was dev / closed-testing data —
+the newest account was the `TEST_PHONE` reviewer one, and no post was newer
+than 2026-09-16. An empty database is therefore the expected state, not a bug.
+
+**Backup** lives outside the git repo in `1$/backups/2026-09-21-before-wipe/`:
+`helpme-db.sql` (full `d1 export`), `images/<offer-id>.png` with
+`image-keys.json`, and `restore-point.json` — the D1 Time Travel bookmark
+`000000eb-00000000-000050ed-bf440669fc72c17e2cc8b6a65e92c971`. It holds real
+phone numbers: never copy it into `helpme/`, which is a public repo.
+
+To undo, either:
+
+- `npx wrangler d1 time-travel restore helpme-db --bookmark=<bookmark above>` —
+  only inside the Time Travel window (7 days on the Workers Free plan, 30 on
+  Paid), and it rolls back **everything** written since, real sign-ups included.
+- Or run only the `INSERT` statements from `helpme-db.sql` with
+  `d1 execute --remote --file=...` — the file opens each table with a plain
+  `CREATE TABLE`, which fails against the live tables, so strip those and the
+  `CREATE INDEX` lines first. Put the pictures back with
+  `npx wrangler kv key put <offer-id> --path=images/<offer-id>.png --namespace-id=9a78980872ea41298fd569860863b9b0 --remote`.
+
+**Phones signed in before the wipe stay signed in.** `App.js` ignores a 404
+from `action: 'me'`, so the cached user survives with no `users` row behind it.
+Browsing and posting still work (`POST /api/offers` needs no `users` row; a
+missing row counts as free tier), but changing the profile photo fails with
+"User not found". Fix for a person: Profile -> Sign out -> Register again. The
+`TEST_PHONE` account rebuilds itself on the next reviewer sign-in, because the
+`verify_code` bypass creates the row when it is missing.
+
 ### Debugging the backend
 
 ```bash
@@ -515,7 +549,8 @@ the developer account, identity checks or payments.
 | Data safety form, app access declarations | Done |
 | **Production access granted by Google** | **GRANTED — confirmed on the dashboard 2026-09-18. Applied 2026-09-12; first application was REJECTED 2026-08-25.** |
 | Production country targeting | Done — Georgia only, set 2026-09-18. Console-only; the API cannot set countries for a `completed` release. |
-| **Production release submitted** | **REJECTED 2026-09-19 — "Login credentials are incorrect"; the reviewer could not sign in. Cause and fix recorded under the Cloudflare secrets section. Re-submitted 2026-09-20.** |
+| **Production release submitted** | **REJECTED 2026-09-19 — "Login credentials are incorrect"; the reviewer could not sign in. Cause and fix recorded under the Cloudflare secrets section. Re-submitted 2026-09-20. Owner reported it live on the Play Store 2026-09-21.** |
+| Wipe test data before the public launch | Done 2026-09-21 — every account, post and picture deleted; backup and undo steps under "Production data wiped" in the Cloudflare section |
 | Report content + block user (Google Play UGC policy) | Done — build 12, 2026-09-18. Worker deployed, D1 tables live. |
 | **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 12 is live — should lower the 12+ rating.** |
 
