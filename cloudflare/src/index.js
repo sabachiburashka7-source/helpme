@@ -81,12 +81,19 @@ const SESSION_IDLE_DAYS = 180;
 // never used a token (see acceptsLegacy). After it, a request without a
 // token is refused and those builds have to update. A LEGACY_WRITES_UNTIL
 // variable (ISO date) on the Worker overrides this, e.g. to end it sooner.
-const LEGACY_WRITES_UNTIL = '2026-10-01T00:00:00Z';
+// Moved from 2026-10-01 on 2026-09-27: the token build was held back to ship
+// together with Lite/Pro, so build 11 is still the one on Google Play.
+const LEGACY_WRITES_UNTIL = '2026-11-01T00:00:00Z';
 
 // Oldest build allowed to use the API. The app sends its build number in
 // X-Kheli-Build; anything older gets 426 and an "update Kheli" prompt.
-// Raise this to force everyone onto a newer build.
-const MIN_BUILD = 13;
+// Raise this to force everyone onto a newer build. 14 because build 13 was
+// never released and cannot draw a price that is locked behind Pro.
+const MIN_BUILD = 14;
+
+// Pro members' requests sit above everyone else's in Browse for this many
+// days after they are posted, then fall back into date order.
+const PRO_BOOST_DAYS = 7;
 
 // The TEST_PHONE code is checked here rather than by Twilio, so nothing else
 // limits how many guesses someone gets at it. Wrong guesses are counted per
@@ -175,10 +182,29 @@ function shapeUser(row, env) {
   };
 }
 
+// Feed rows carry the poster's plan as poster_tier / poster_expires.
+function posterIsPro(row) {
+  return effectiveTier({ tier: row.poster_tier, subscription_expires_at: row.poster_expires }) === 'pro';
+}
+
+// Pro members' requests from the last PRO_BOOST_DAYS go first, then the
+// rest. Rows arrive newest first and sort() is stable, so sorting on the
+// group alone keeps each group newest first.
+function boostPro(rows) {
+  const since = new Date(Date.now() - PRO_BOOST_DAYS * DAY_MS).toISOString();
+  const boosted = (row) => posterIsPro(row) && String(row.created_at) >= since;
+  return [...rows].sort((a, b) => Number(boosted(b)) - Number(boosted(a)));
+}
+
 // D1 stores `images` as a JSON string; the app expects a real array. Every
 // offer leaving this Worker goes through here so the shape matches what
 // Supabase used to return.
-function shapeOffer(row) {
+//
+// `view` is what the person asking may see. A price is a Pro feature: for
+// anyone else it is null, with `price_locked` so the app can draw a lock in
+// its place. Someone who has not signed in gets no phone number - calling a
+// poster takes an account.
+function shapeOffer(row, { showPrice = true, showPhone = true } = {}) {
   if (!row) return null;
   let images = [];
   if (typeof row.images === 'string' && row.images) {
@@ -194,18 +220,21 @@ function shapeOffer(row) {
   return {
     id: row.id,
     description: row.description,
-    price: row.price,
+    price: showPrice ? row.price : null,
+    price_locked: !showPrice,
     location: row.location,
     category: row.category,
     name: row.name,
     avatar: row.avatar,
-    phone: row.phone,
+    phone: showPhone ? row.phone : null,
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
     profile_image: row.profile_image || null,
     images,
     image: row.image || null,
     created_at: row.created_at,
+    // The poster has Pro right now, so the app puts a Pro badge on it.
+    pro: posterIsPro(row),
     // Only ever true on your own offers: the feed query filters everyone
     // else's hidden offers out entirely. Lets "My requests" say why a post
     // stopped appearing instead of leaving the owner to guess.
@@ -760,23 +789,43 @@ async function handleOffers(request, env) {
   if (caller.response) return caller.response;
 
   if (request.method === 'GET') {
-    // The viewer is whoever the session belongs to. Builds 11/12 read the
-    // feed without one until the legacy window closes; their `?phone=` is
-    // not trusted, so they get the public feed with no per-viewer filtering
-    // (auto-hiding still applies). Afterwards the feed - which carries every
-    // poster's number for the call button - is for signed-in people only.
-    if (!caller.phone && !legacyWindowOpen(env)) return updateRequired();
+    // Three kinds of viewer:
+    //  - Signed in: the feed is filtered for them, and prices show only with
+    //    Pro, or on their own requests.
+    //  - A build that sends X-Kheli-Build but no token: someone looking
+    //    around before signing in. They see requests, but no phone numbers
+    //    (calling takes an account) and no prices.
+    //  - No token and no build number: builds 11/12. Until the legacy window
+    //    closes they get the public feed they always had; their `?phone=` is
+    //    not trusted, so nothing is filtered per viewer (auto-hiding still
+    //    applies). After it, they are told to update.
     const viewer = caller.phone || '';
+    const browsing = !viewer && Boolean(request.headers.get('X-Kheli-Build'));
+    const legacy = !viewer && !browsing;
+    if (legacy && !legacyWindowOpen(env)) return updateRequired();
+
+    let viewerPro = false;
+    if (viewer) {
+      const me = await db
+        .prepare('SELECT tier, subscription_expires_at FROM users WHERE phone = ?')
+        .bind(viewer)
+        .first();
+      viewerPro = effectiveTier(me) === 'pro';
+    }
 
     // Four things happen in one statement so the feed stays a single round
     // trip: count reports per offer, drop offers by people the viewer has
     // blocked, drop offers the viewer has already reported, and drop offers
     // that crossed the report threshold for everyone. `report_count` rides
-    // along so shapeOffer can mark the owner's own hidden posts.
+    // along so shapeOffer can mark the owner's own hidden posts, and the
+    // poster's plan so Pro requests can be badged and moved up.
     const sql = `
       SELECT o.*,
+             u.tier AS poster_tier,
+             u.subscription_expires_at AS poster_expires,
              (SELECT COUNT(*) FROM reports r WHERE r.offer_id = o.id) AS report_count
         FROM offers o
+        LEFT JOIN users u ON u.phone = o.phone
        WHERE (
                ? = ''
                OR o.phone IS NULL
@@ -799,7 +848,14 @@ async function handleOffers(request, env) {
       .prepare(sql)
       .bind(viewer, viewer, viewer, viewer, viewer, viewer, REPORT_HIDE_THRESHOLD)
       .all();
-    return json((results || []).map(shapeOffer));
+    return json(
+      boostPro(results || []).map((row) =>
+        shapeOffer(row, {
+          showPrice: legacy || viewerPro || (viewer !== '' && row.phone === viewer),
+          showPhone: !browsing,
+        })
+      )
+    );
   }
 
   if (request.method === 'POST') {
@@ -866,7 +922,10 @@ async function handleOffers(request, env) {
       .run();
 
     const row = await db.prepare('SELECT * FROM offers WHERE id = ?').bind(id).first();
-    return json(shapeOffer(row), 201);
+    return json(
+      shapeOffer({ ...row, poster_tier: account.tier, poster_expires: account.subscription_expires_at }),
+      201
+    );
   }
 
   if (request.method === 'DELETE') {

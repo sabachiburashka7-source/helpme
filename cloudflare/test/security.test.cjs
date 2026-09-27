@@ -176,10 +176,10 @@ async function main() {
   check('me without a token is refused (426)', r.status === 426 && r.data.code === 'update_required', r);
   r = await auth(call, { action: 'me' }, { token: 'not-a-real-token-at-all-000000000000' });
   check('me with a made-up token is refused (401 session_invalid)', r.status === 401 && r.data.code === 'session_invalid', r);
-  r = await auth(call, { action: 'me' }, { token: reviewer, build: 13 });
+  r = await auth(call, { action: 'me' }, { token: reviewer, build: 14 });
   check('me with the real token works', r.status === 200 && r.data.phone === TEST && !('token' in r.data), r);
-  r = await auth(call, { action: 'me' }, { token: reviewer, build: 12 });
-  check('a build below MIN_BUILD is told to update', r.status === 426, r);
+  r = await auth(call, { action: 'me' }, { token: reviewer, build: 13 });
+  check('a build below MIN_BUILD (13, never released) is told to update', r.status === 426, r);
   r = await call('GET', '/api/image/whatever.png', { build: 12 });
   check('...but pictures still load for it', r.status === 404, r);
 
@@ -293,8 +293,48 @@ async function main() {
   console.log('\n# Feed');
   r = await call('GET', '/api/offers');
   check('no-token feed still loads during the window', r.status === 200 && Array.isArray(r.data), r);
+  check('...with prices and numbers, as builds 11/12 always had', r.data.length > 0 && r.data.every((o) => o.phone && o.price !== null && !o.price_locked), r.data);
   r = await call('GET', '/api/offers', { token: reviewer });
   check('signed-in feed includes my own offer', r.status === 200 && r.data.some((o) => o.id === reviewerOffer), r);
+
+  console.log('\n# Lite and Pro');
+  const PRO = '+995599000444';
+  const pro = 'pro-token-' + crypto.randomBytes(16).toString('hex');
+  await addAccount(db, PRO, 'Pro Paata', { token: pro, used: true });
+  const setPlan = (tier, expires) =>
+    db.prepare('UPDATE users SET tier = ?, subscription_expires_at = ? WHERE phone = ?').bind(tier, expires, PRO).run();
+  await setPlan('pro', new Date(Date.now() + 30 * 86400000).toISOString());
+  r = await call('POST', '/api/offers', { token: pro, body: { description: 'Assemble a wardrobe', price: 60 } });
+  check('a Pro member\'s new post comes back marked Pro', r.status === 201 && r.data.pro === true, r);
+  const proOffer = r.data.id;
+  r = await call('POST', '/api/offers', { token: pro, body: { description: 'Old Pro post', price: 15 } });
+  const oldProOffer = r.data.id;
+  // The Pro post is older than the reviewer's, so only the boost can put it
+  // first; the other one is past the 7-day boost.
+  const ago = (ms) => new Date(Date.now() - ms).toISOString();
+  await db.prepare('UPDATE offers SET created_at = ? WHERE id = ?').bind(ago(3600000), proOffer).run();
+  await db.prepare('UPDATE offers SET created_at = ? WHERE id = ?').bind(ago(8 * 86400000), oldProOffer).run();
+  const order = (list) => list.map((o) => o.id).join(',');
+
+  r = await call('GET', '/api/offers', { build: 14 });
+  check('a new build that is not signed in can look around', r.status === 200 && r.data.length === 3, r);
+  check('...but sees no phone numbers and no prices', r.data.every((o) => o.phone === null && o.price === null && o.price_locked === true), r.data);
+  check('...a Pro post from this week comes first; an older one keeps date order', order(r.data) === [proOffer, reviewerOffer, oldProOffer].join(','), r.data);
+  check('...and Pro posts are marked', r.data.find((o) => o.id === proOffer).pro === true && r.data.find((o) => o.id === reviewerOffer).pro === false, r.data);
+
+  r = await call('GET', '/api/offers', { token: reviewer });
+  const byId = (list, id) => list.find((o) => o.id === id);
+  check('Lite: my own price shows', byId(r.data, reviewerOffer).price === 20 && !byId(r.data, reviewerOffer).price_locked, r.data);
+  check('Lite: other people\'s prices are locked, their numbers are not', byId(r.data, proOffer).price === null && byId(r.data, proOffer).price_locked === true && byId(r.data, proOffer).phone === PRO, r.data);
+
+  r = await call('GET', '/api/offers', { token: pro });
+  check('Pro: every price shows', byId(r.data, reviewerOffer).price === 20 && byId(r.data, proOffer).price === 60 && r.data.every((o) => !o.price_locked), r.data);
+
+  await setPlan('pro', ago(86400000));
+  r = await call('GET', '/api/offers', { token: pro });
+  check('expired Pro: prices lock again', byId(r.data, reviewerOffer).price === null && byId(r.data, reviewerOffer).price_locked === true, r.data);
+  check('...and the posts lose the boost and the badge', order(r.data) === [reviewerOffer, proOffer, oldProOffer].join(',') && r.data.every((o) => o.pro === false), r.data);
+  await setPlan('free', null);
 
   console.log('\n# Sign out and sessions');
   r = await auth(call, { action: 'verify_code', intent: 'login', phone: TEST, code: OTP }, { ip: '3.3.3.3' });
@@ -373,6 +413,8 @@ async function main() {
   const closedOffer = r.data.id;
   r = await call2('GET', '/api/offers');
   check('no-token feed is refused', r.status === 426, r);
+  r = await call2('GET', '/api/offers', { build: 14 });
+  check('...but a new build can still look around, without numbers or prices', r.status === 200 && r.data.length === 1 && r.data[0].phone === null && r.data[0].price === null, r);
   r = await call2('POST', '/api/offers', { body: { description: 'x', price: 1, phone: LEGACY_A } });
   check('no-token post is refused', r.status === 426, r);
   r = await call2('DELETE', '/api/offers', { body: { id: closedOffer } });

@@ -18,6 +18,11 @@ import {
   AmbientBackground, BlurSurface, GlassSurface, GlassChip, PhotoScrim,
   GlassButton, PressableGlass, usePressScale,
 } from '../components/Glass';
+import { LockGlyph, ProBadge, formatKm } from '../components/Pro';
+
+// Why the sign-in sheet opened, as translation keys.
+const SIGN_IN_TO_CALL = 'Sign in to call the person who posted this.';
+const SIGN_IN_TO_REPORT = 'Sign in to report or block.';
 
 function useDisplayLocation(offer) {
   const { lang } = useTranslation();
@@ -73,17 +78,28 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-export default function BrowseScreen({ dbOffers, loading, user, onReportOffer, onBlockUser }) {
+export default function BrowseScreen({
+  dbOffers, loading, user, onReportOffer, onBlockUser, onRequireSignIn, onOpenPro,
+}) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
+  const isPro = user?.tier === 'pro';
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState(null);
+  // By id, so the open request picks up a fresh copy of itself when the feed
+  // reloads - e.g. with the phone number, once the person has signed in.
+  const [selectedId, setSelectedId] = useState(null);
+  const selected = selectedId ? dbOffers.find((o) => o.id === selectedId) || null : null;
   const [filterOpen, setFilterOpen] = useState(false);
   const [radiusKm, setRadiusKm] = useState(null);
   const [userCoords, setUserCoords] = useState(null);
   const [locStatus, setLocStatus] = useState('idle'); // idle | loading | granted | error
   const [locError, setLocError] = useState('');
+
+  // Distance search is Pro. If Pro ends, drop a radius that was set with it.
+  useEffect(() => {
+    if (!isPro) setRadiusKm(null);
+  }, [isPro]);
 
   const headerOffset = useRef(new Animated.Value(0)).current;
   const headerVisible = useRef(true);
@@ -121,6 +137,12 @@ export default function BrowseScreen({ dbOffers, loading, user, onReportOffer, o
   };
 
   async function pickRadius(km) {
+    // Lite and signed-out people see the distance chips, so they know the
+    // feature exists, and get the Pro screen instead.
+    if (km != null && !isPro) {
+      onOpenPro?.();
+      return;
+    }
     setRadiusKm(km);
     if (km == null) return;
     if (userCoords) return;
@@ -155,6 +177,13 @@ export default function BrowseScreen({ dbOffers, loading, user, onReportOffer, o
     return true;
   });
 
+  // How far away each request is: Pro, once the location is known.
+  function distanceTo(o) {
+    if (!isPro || !userCoords || !o) return null;
+    if (typeof o.latitude !== 'number' || typeof o.longitude !== 'number') return null;
+    return haversineKm(userCoords, { lat: o.latitude, lng: o.longitude });
+  }
+
   return (
     <AmbientBackground>
       <ScrollView
@@ -181,7 +210,11 @@ export default function BrowseScreen({ dbOffers, loading, user, onReportOffer, o
         )}
         {filtered.map((offer, i) => (
           <FadeInUp key={offer.id} delay={Math.min(i * 40, 240)}>
-            <OfferCard offer={offer} onPress={() => setSelected(offer)} />
+            <OfferCard
+              offer={offer}
+              distanceKm={distanceTo(offer)}
+              onPress={() => setSelectedId(offer.id)}
+            />
           </FadeInUp>
         ))}
       </ScrollView>
@@ -220,6 +253,7 @@ export default function BrowseScreen({ dbOffers, loading, user, onReportOffer, o
               onPickRadius={pickRadius}
               locStatus={locStatus}
               locError={locError}
+              isPro={isPro}
               t={t}
             />
           </View>
@@ -229,10 +263,13 @@ export default function BrowseScreen({ dbOffers, loading, user, onReportOffer, o
 
       <DetailsModal
         offer={selected}
-        onClose={() => setSelected(null)}
+        distanceKm={distanceTo(selected)}
+        onClose={() => setSelectedId(null)}
         user={user}
         onReportOffer={onReportOffer}
         onBlockUser={onBlockUser}
+        onRequireSignIn={onRequireSignIn}
+        onOpenPro={onOpenPro}
       />
     </AmbientBackground>
   );
@@ -370,7 +407,7 @@ const glyphStyles = StyleSheet.create({
   },
 });
 
-function SearchPanel({ open, value, onChange, radiusKm, onPickRadius, locStatus, locError, t }) {
+function SearchPanel({ open, value, onChange, radiusKm, onPickRadius, locStatus, locError, isPro, t }) {
   const RADIUS_OPTIONS = buildRadiusOptions(t);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -404,6 +441,12 @@ function SearchPanel({ open, value, onChange, radiusKm, onPickRadius, locStatus,
 
       <View style={styles.radiusRow}>
         <Text style={styles.radiusLabel}>{t('Radius')}</Text>
+        {!isPro ? (
+          <View style={styles.radiusPro}>
+            <LockGlyph color={colors.textTertiary} size={9} />
+            <ProBadge small style={{ marginLeft: 6 }} />
+          </View>
+        ) : null}
       </View>
       <ScrollView
         horizontal
@@ -431,9 +474,10 @@ function SearchPanel({ open, value, onChange, radiusKm, onPickRadius, locStatus,
   );
 }
 
-function OfferCard({ offer, onPress }) {
+function OfferCard({ offer, distanceKm, onPress }) {
   const { t } = useTranslation();
   const displayLocation = useDisplayLocation(offer);
+  const where = distanceKm != null ? `${displayLocation} · ${formatKm(distanceKm)}` : displayLocation;
   return (
     <PressableGlass onPress={onPress} style={styles.cardWrap} scaleTo={0.985}>
       <View style={styles.card}>
@@ -458,10 +502,18 @@ function OfferCard({ offer, onPress }) {
             tone="darkStrong"
             radius={radius.pill}
             shadow="subtle"
-            style={styles.cardPriceTag}
+            style={[styles.cardPriceTag, offer.price_locked && styles.cardPriceTagLocked]}
           >
-            <Text style={styles.cardPriceTagText}>₾{offer.price}</Text>
+            {offer.price_locked ? (
+              <>
+                <LockGlyph color="#fff" size={10} />
+                <Text style={[styles.cardPriceTagText, { marginLeft: 6 }]}>₾ ···</Text>
+              </>
+            ) : (
+              <Text style={styles.cardPriceTagText}>₾{offer.price}</Text>
+            )}
           </GlassSurface>
+          {offer.pro ? <ProBadge small style={styles.cardProBadge} /> : null}
         </View>
 
         <GlassSurface
@@ -475,7 +527,7 @@ function OfferCard({ offer, onPress }) {
             <Text style={styles.cardName} numberOfLines={1}>{offer.name}</Text>
             <View style={styles.cardLocWrap}>
               <View style={styles.locDot} />
-              <Text style={styles.cardLoc} numberOfLines={1}>{displayLocation}</Text>
+              <Text style={styles.cardLoc} numberOfLines={1}>{where}</Text>
             </View>
           </View>
         </GlassSurface>
@@ -813,7 +865,9 @@ const moderationStyles = StyleSheet.create({
   },
 });
 
-function DetailsModal({ offer, onClose, user, onReportOffer, onBlockUser }) {
+function DetailsModal({
+  offer, distanceKm, onClose, user, onReportOffer, onBlockUser, onRequireSignIn, onOpenPro,
+}) {
   const { t } = useTranslation();
   const open = !!offer;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -845,12 +899,20 @@ function DetailsModal({ offer, onClose, user, onReportOffer, onBlockUser }) {
   const displayLocation = useDisplayLocation(data);
 
   // You cannot report or block yourself, so the footer is only for other
-  // people's requests. Falls back to hiding the actions if we somehow have
-  // no signed-in user rather than firing calls that would 400.
+  // people's requests. Someone who has not signed in still sees it (Google
+  // Play expects a way to flag content), and is asked to sign in first.
   const isOwnOffer = !!(user?.phone && data?.phone && user.phone === data.phone);
   const canModerate = !!(user?.phone && data?.phone) && !isOwnOffer;
+  const showModeration = !user || canModerate;
+  const where = distanceKm != null ? `${displayLocation} · ${formatKm(distanceKm)}` : displayLocation;
+
+  function handleReport() {
+    if (!user) return onRequireSignIn?.(SIGN_IN_TO_REPORT);
+    setReportOpen(true);
+  }
 
   function handleBlock() {
+    if (!user) return onRequireSignIn?.(SIGN_IN_TO_REPORT);
     const who = data.name || t('this person');
     Alert.alert(
       t('Block {name}?').replace('{name}', who),
@@ -912,21 +974,35 @@ function DetailsModal({ offer, onClose, user, onReportOffer, onBlockUser }) {
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.modalName} numberOfLines={1}>{data.name}</Text>
-                      <Text style={styles.modalSub} numberOfLines={1}>{displayLocation}</Text>
+                      <View style={styles.modalNameRow}>
+                        <Text style={styles.modalName} numberOfLines={1}>{data.name}</Text>
+                        {data.pro ? <ProBadge small style={{ marginLeft: 8 }} /> : null}
+                      </View>
+                      <Text style={styles.modalSub} numberOfLines={1}>{where}</Text>
                     </View>
-                    <Text style={styles.modalPrice}>₾{data.price}</Text>
+                    {data.price_locked ? (
+                      <Pressable onPress={onOpenPro} hitSlop={8}>
+                        <GlassSurface tone="accent" radius={radius.pill} shadow="none" style={styles.modalPriceLocked}>
+                          <LockGlyph color={colors.accent} size={11} />
+                          <Text style={styles.modalPriceLockedText}>{t('Price with Pro')}</Text>
+                        </GlassSurface>
+                      </Pressable>
+                    ) : (
+                      <Text style={styles.modalPrice}>₾{data.price}</Text>
+                    )}
                   </View>
                 </GlassSurface>
 
                 <Text style={styles.modalDesc}>{data.description}</Text>
 
-                <GlassSurface tone="soft" radius={20} shadow="none" style={styles.detailGroup}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>{t('Number')}</Text>
-                    <Text style={styles.detailValue}>{data.phone}</Text>
-                  </View>
-                </GlassSurface>
+                {data.phone ? (
+                  <GlassSurface tone="soft" radius={20} shadow="none" style={styles.detailGroup}>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>{t('Number')}</Text>
+                      <Text style={styles.detailValue}>{data.phone}</Text>
+                    </View>
+                  </GlassSurface>
+                ) : null}
 
                 <OfferMap offer={data} t={t} />
 
@@ -948,12 +1024,23 @@ function DetailsModal({ offer, onClose, user, onReportOffer, onBlockUser }) {
                 ) : null}
 
                 <View style={{ height: 18 }} />
-                <GlassButton
-                  title={t('Call now')}
-                  size="lg"
-                  onPress={() => Linking.openURL(`tel:${data.phone}`)}
-                  style={{ alignSelf: 'stretch' }}
-                />
+                {data.phone ? (
+                  <GlassButton
+                    title={t('Call now')}
+                    size="lg"
+                    onPress={() => Linking.openURL(`tel:${data.phone}`)}
+                    style={{ alignSelf: 'stretch' }}
+                  />
+                ) : (
+                  // No number before signing in: calling someone takes an
+                  // account, so strangers cannot collect everyone's number.
+                  <GlassButton
+                    title={t('Sign in to call')}
+                    size="lg"
+                    onPress={() => onRequireSignIn?.(SIGN_IN_TO_CALL)}
+                    style={{ alignSelf: 'stretch' }}
+                  />
+                )}
                 <View style={{ height: 8 }} />
                 <GlassButton
                   title={t('Close')}
@@ -963,9 +1050,9 @@ function DetailsModal({ offer, onClose, user, onReportOffer, onBlockUser }) {
                   style={{ alignSelf: 'stretch' }}
                 />
 
-                {canModerate ? (
+                {showModeration ? (
                   <ModerationFooter
-                    onReport={() => setReportOpen(true)}
+                    onReport={handleReport}
                     onBlock={handleBlock}
                   />
                 ) : null}
@@ -1075,8 +1162,15 @@ const styles = StyleSheet.create({
   },
 
   radiusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingBottom: 8,
+  },
+  radiusPro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
   },
   radiusLabel: {
     fontSize: 11,
@@ -1126,7 +1220,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 7,
   },
+  cardPriceTagLocked: { flexDirection: 'row', alignItems: 'center' },
   cardPriceTagText: { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 0.2 },
+  // Level with the price tag across the top of the picture.
+  cardProBadge: {
+    position: 'absolute',
+    top: 18,
+    left: 14,
+  },
 
   imageLoadingBadge: {
     flexDirection: 'row',
@@ -1236,7 +1337,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  modalName: { fontSize: 16, fontWeight: '800', color: colors.text },
+  modalNameRow: { flexDirection: 'row', alignItems: 'center' },
+  modalName: { fontSize: 16, fontWeight: '800', color: colors.text, flexShrink: 1 },
+  modalPriceLocked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    marginLeft: 8,
+  },
+  modalPriceLockedText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.accent,
+    marginLeft: 6,
+  },
   modalSub: { fontSize: 12, color: colors.textTertiary, marginTop: 3 },
   modalPrice: {
     fontSize: 22,

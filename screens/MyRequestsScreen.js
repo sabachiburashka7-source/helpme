@@ -19,9 +19,12 @@ import {
   AmbientBackground, GlassSurface, GlassPanel, GlassField, GlassButton, PhotoScrim,
   GlassSegmented, GlassChip, PressableGlass,
 } from '../components/Glass';
+import { ProBadge } from '../components/Pro';
 
 const MAX_OFFER_IMAGES = 6;
 const ACCENT = '#7A1230';
+// Why the sign-in sheet opened, as a translation key.
+const SIGN_IN_TO_POST = 'Sign in to post a request. Looking around is free.';
 
 function confirmDialog(title, message) {
   return new Promise((resolve) => {
@@ -72,7 +75,61 @@ function postsThisMonthCount(offers) {
   }).length;
 }
 
-export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onCancelSubscription, onUpgrade, onUpdateProfileImage, blocked = [], onUnblockUser }) {
+// Two separate screens rather than one with an early return: they use
+// different hooks, and signing in swaps one for the other.
+export default function MyRequestsScreen(props) {
+  if (!props.user) {
+    return <SignedOutRequests onRequireSignIn={props.onRequireSignIn} onOpenPro={props.onUpgrade} />;
+  }
+  return <SignedInRequests {...props} />;
+}
+
+// Posting needs a verified phone number; looking around does not. This is
+// what the tab shows until someone signs in.
+function SignedOutRequests({ onRequireSignIn, onOpenPro }) {
+  const { t } = useTranslation();
+  const tabBarHeight = useBottomTabBarHeight();
+  return (
+    <AmbientBackground>
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <ScrollView
+          contentContainerStyle={[styles.signedOut, { paddingBottom: tabBarHeight + 30 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* The only language switcher someone sees before signing in. */}
+          <View style={styles.signedOutTop}>
+            <LanguageSwitcher />
+          </View>
+          <FadeInUp>
+            <GlassPanel tone="strong" radius={32} contentStyle={styles.signedOutCard}>
+              <View style={styles.emptyOrb}>
+                <View style={styles.emptyOrbCore} />
+              </View>
+              <Text style={styles.signedOutTitle}>{t('Need help with something?')}</Text>
+              <Text style={styles.signedOutBody}>
+                {t('Sign in with your phone number to post a request. Looking around is free and needs no account.')}
+              </Text>
+              <GlassButton
+                title={t('Sign in or register')}
+                size="lg"
+                onPress={() => onRequireSignIn?.(SIGN_IN_TO_POST)}
+                style={{ alignSelf: 'stretch' }}
+              />
+            </GlassPanel>
+          </FadeInUp>
+          <FadeInUp delay={80}>
+            <Pressable onPress={onOpenPro} style={styles.proLink} hitSlop={8}>
+              <ProBadge small />
+              <Text style={styles.proLinkText}>{t('What you get with Pro')}</Text>
+            </Pressable>
+          </FadeInUp>
+        </ScrollView>
+      </SafeAreaView>
+    </AmbientBackground>
+  );
+}
+
+function SignedInRequests({ user, myOffers, loading, onAddOffer, onUpdateOffer, onRemoveOffer, onLogout, onDeleteAccount, onCancelSubscription, onUpgrade, onUpdateProfileImage, blocked = [], onUnblockUser }) {
   const { t, lang } = useTranslation();
   const tabBarHeight = useBottomTabBarHeight();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -90,6 +147,18 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
   const quotaRemaining = unlimited ? Infinity : Math.max(0, quotaLimit - quotaUsed);
 
   function showPaywall() {
+    // On Lite, the way past the cap is Pro, so offer it right there.
+    if (tier !== 'pro' && !unlimited) {
+      Alert.alert(
+        t('Monthly limit reached'),
+        t('You have used all {n} free posts this month. Pro gives you 15 a month.').replace('{n}', String(quotaLimit)),
+        [
+          { text: t('Later'), style: 'cancel' },
+          { text: t('Get Pro'), onPress: () => onUpgrade?.() },
+        ]
+      );
+      return;
+    }
     Alert.alert(
       t('Monthly limit reached'),
       t('You have used all {n} posts allowed this month. Please try again next month.').replace('{n}', String(quotaLimit)),
@@ -298,6 +367,9 @@ export default function MyRequestsScreen({ user, myOffers, loading, onAddOffer, 
                               .replace('{limit}', String(quotaLimit))}
                       </Text>
                     </GlassSurface>
+                    {tier !== 'pro' ? (
+                      <GlassChip label={t('Get Pro')} active onPress={onUpgrade} />
+                    ) : null}
                   </View>
                 </GlassPanel>
               </View>
@@ -581,6 +653,44 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1 },
   container: { flex: 1 },
+
+  // Signed out
+  signedOut: { paddingHorizontal: 16, paddingTop: 6 },
+  signedOutTop: { alignItems: 'flex-end', marginBottom: 12, paddingHorizontal: 4 },
+  signedOutCard: {
+    paddingHorizontal: 22,
+    paddingTop: 30,
+    paddingBottom: 22,
+    alignItems: 'center',
+  },
+  signedOutTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  signedOutBody: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  proLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingVertical: 6,
+  },
+  proLinkText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: colors.accent,
+    marginLeft: 8,
+  },
 
   // Hero
   heroOuter: {

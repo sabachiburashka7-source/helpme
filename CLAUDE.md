@@ -127,6 +127,7 @@ If a clone reappears, also run:
 | `components/BgImage.js` | `<View>` with a background image. Wraps `<Image>` absolutely under children. Use this anywhere you'd reach for CSS `backgroundImage`. |
 | `components/moderation.js` | `REPORT_REASONS` — the report reason keys. Must stay in sync with the `REPORT_REASONS` set in `cloudflare/src/index.js`, which 400s on anything else. |
 | `components/Glass.js` | Glassmorphism primitives (`AmbientBackground`, `GlassSurface`, `BlurSurface`, `GlassButton`, `GlassField`, `GlassSegmented`, `GlassChip`). See the design system section below. |
+| `components/Pro.js` | `LockGlyph` (drawn where a Pro-only price or filter would be), `ProBadge`, `formatKm`. The Pro screen itself is `screens/ProScreen.js`. See "Lite and Pro". |
 
 ## Design system — glassmorphism (`components/Glass.js`)
 
@@ -321,7 +322,11 @@ this or the app will receive the wrong shapes:
   `nodejs_compat` flag set.
 
 
-### Who is asking — session tokens (2026-09-22, Worker + build 13)
+### Who is asking — session tokens (2026-09-22, Worker; ships in build 14)
+
+Build 13 carried this but was never uploaded. Build 14 (1.0.8) carries it
+together with Lite/Pro and browsing without an account (see "Lite and Pro"
+below), so wherever this section says "build 13", read "build 14".
 
 Until 2026-09-22 the API believed whatever phone number a request carried.
 The SMS code only guarded the app's own sign-in screen, so anyone who sent
@@ -356,7 +361,9 @@ number. Fixed in the Worker (live 2026-09-22) and in build 13:
 - The reviewer account skips the monthly quota but is capped at 10 posts a
   day, so a leaked code cannot run up the OpenAI bill.
 
-**Legacy window for builds 11/12 (no token) — closes 2026-10-01 00:00 UTC.**
+**Legacy window for builds 11/12 (no token) — closes 2026-11-01 00:00 UTC.**
+(Was 2026-10-01. Moved on 2026-09-27 because the owner held the token build
+back to ship it with Lite/Pro, and build 11 is still the one on Play.)
 Until `LEGACY_WRITES_UNTIL`, a request with no token may still load the feed
 and post, illustrate and delete its own requests the old way, but only for
 accounts that exist and have **never used a token** — a phone that has
@@ -365,13 +372,14 @@ account, photo, `me`, report, block, reading a block list) already needs a
 token. After the date, builds 11/12 can only sign in and are told to update.
 To close it sooner or push it back, change `LEGACY_WRITES_UNTIL` in
 `src/index.js` (or set a `LEGACY_WRITES_UNTIL` variable on the Worker) and
-deploy. **Only push it back if build 13 is not live by then** — it is the
+deploy. **Only push it back if build 14 is not live by then** — it is the
 last way in without a token.
 
 **Security test — run before every Worker deploy that touches auth, offers,
 reports or blocks:** `cd helpme/cloudflare && node test/security.test.cjs`.
-78 checks against wrangler's in-memory local D1/KV with a stand-in OpenAI;
-nothing touches production.
+90 checks (including who sees prices and numbers, and the Pro boost) against
+wrangler's in-memory local D1/KV with a stand-in OpenAI; nothing touches
+production.
 
 ### Moderation — reports and blocks (shipped 2026-09-18, build 12)
 
@@ -404,7 +412,7 @@ they get the unfiltered public feed (threshold hiding still applies), and
 after it, nothing.
 
 Build 12 was never uploaded to Play, so the Report / Block buttons first
-reach users in **build 13**.
+reach users in **build 14** (build 13 was never uploaded either).
 
 The unique index on `reports (offer_id, reporter_phone)` is what makes
 "distinct" true, so the auto-hide count is a plain `COUNT(*)`. Re-reporting
@@ -418,6 +426,69 @@ Read what has come in with:
 cd helpme/cloudflare
 npx wrangler d1 execute helpme-db --remote --command="SELECT offer_id, reason, COUNT(*) n FROM reports GROUP BY offer_id, reason ORDER BY n DESC;"
 ```
+
+### Lite and Pro, and browsing without an account (2026-09-27, Worker live, build 14)
+
+Why: the sign-in SMS is the expensive part of a user (Twilio Verify to
+Georgia is ~$0.22 per sign-in; a picture is ~$0.005), and until build 14 the
+app demanded it before showing anything. The owner wants Pro at **$1/month**.
+
+**Who sees what** — the server enforces all of it; the app only draws it:
+
+| | Not signed in | Lite (free, signed in) | Pro ($1/month) |
+|---|---|---|---|
+| Browse requests, search by text | yes | yes | yes |
+| Phone number, Call button | no ("Sign in to call") | yes | yes |
+| Prices | no | only on their own posts | yes |
+| Distance filter + "3.2 km" on cards | no (opens Pro screen) | no (opens Pro screen) | yes |
+| Posting | no (sign in) | 3 a month | 15 a month |
+| Report / block | asks to sign in | yes | yes |
+| Their posts in Browse | — | date order | top of the list for 7 days, Pro badge |
+
+- A request with **no token but an `X-Kheli-Build` header** is someone on
+  build 14+ browsing before signing in: `GET /api/offers` answers with
+  `phone: null` and `price: null` on every offer. No token and no build
+  header is builds 11/12 (legacy feed, prices and numbers, until
+  `LEGACY_WRITES_UNTIL`). Do not merge these two paths.
+- `shapeOffer(row, { showPrice, showPhone })` decides per offer. A hidden
+  price comes back as `price: null, price_locked: true`, and the app draws a
+  lock. `pro: true` marks offers whose poster has Pro right now. The feed
+  joins `users` for the poster's plan (`poster_tier`, `poster_expires`) and
+  `boostPro()` puts Pro posts from the last `PRO_BOOST_DAYS` (7) first.
+- The distance filter runs in the app. The feed carries coordinates for
+  everyone, so it is a convenience gate, not a secret. The viewer's location
+  never leaves the phone, which the privacy policy now says.
+- `MIN_BUILD` is 14, because build 13 cannot draw a locked price.
+- Pro is `users.tier = 'pro'` with `subscription_expires_at` in the future
+  (`effectiveTier`). The shared reviewer account (`TEST_PHONE`) is Lite like
+  everyone else.
+- The privacy policy (`src/privacy.html`) was updated the same day to say
+  numbers are for signed-in users only and prices for Pro only.
+
+**Payments are NOT connected.** "Get Pro" says "Coming soon". Give someone
+Pro by hand with:
+
+```bash
+cd helpme/cloudflare
+npx wrangler d1 execute helpme-db --remote --command="UPDATE users SET tier='pro', subscription_expires_at='2026-12-31T00:00:00Z' WHERE phone='+995XXXXXXXXX';"
+```
+
+When payments are added, **they must be Google Play Billing**. Play's
+Payments policy requires Play's billing for a subscription that unlocks app
+features, and Georgia is in no alternative-billing program, so a bank
+gateway (TBC, BOG, ...) for Pro would get the app pulled. Paying a helper
+for real-world work is a different matter and may use anything. The owner
+must first create a payments profile in Play Console (console-only). Then:
+
+1. Create the $1 subscription product.
+2. Add Play Billing to the app.
+3. Have the Worker verify each purchase with the Google Play Developer API
+   and set `tier` / `subscription_expires_at`. Use Real-time developer
+   notifications for renewals and cancellations.
+4. Point `cancel_subscription` at Play's "Manage subscription" screen.
+
+**Do not publish build 14 before payments work** without telling the owner
+first: Lite users would see locked prices with no way to unlock them.
 
 ### Secrets (Cloudflare dashboard -> Workers -> helpme-api -> Settings -> Variables)
 
@@ -609,7 +680,7 @@ the developer account, identity checks or payments.
 | In-app Privacy Policy link | Done (Profile "Legal" section + Auth consent line, open via native `Linking`) |
 | Trim unused sensitive permissions | Done (removed `RECORD_AUDIO`/`SYSTEM_ALERT_WINDOW`; capped legacy storage perms in `AndroidManifest.xml`) |
 | In-app account deletion | Done (`/api/delete-account` + Profile screen) |
-| Subscription quota (3 free posts/month, Pro UI hidden for v1) | Done |
+| Subscription quota (3 free posts/month, Pro UI hidden for v1) | Done — replaced by Lite/Pro in build 14 (see "Lite and Pro") |
 | **Back up keystore + `keystore.properties` off-machine** | **TODO (user task — if lost, app can never be updated on Play Store)** |
 | Bump `expo.android.versionCode` (and matching value in `android/app/build.gradle`) before every upload after the first | Ongoing |
 | Play Console developer account + app entry created | Done (owner confirmed 2026-09-02) |
@@ -622,10 +693,12 @@ the developer account, identity checks or payments.
 | Production country targeting | Done — Georgia only, set 2026-09-18. Console-only; the API cannot set countries for a `completed` release. |
 | **Production release submitted** | **REJECTED 2026-09-19 — "Login credentials are incorrect"; the reviewer could not sign in. Cause and fix recorded under the Cloudflare secrets section. Re-submitted 2026-09-20. Owner reported it live on the Play Store 2026-09-21.** |
 | Wipe test data before the public launch | Done 2026-09-21 — every account, post and picture deleted; backup and undo steps under "Production data wiped" in the Cloudflare section |
-| Report content + block user (Google Play UGC policy) | Done in the Worker 2026-09-18. Build 12 was never uploaded, so the in-app buttons ship with build 13. |
-| Server stops trusting the phone number in requests (session tokens) | Done 2026-09-22 — Worker live; build 13 carries the tokens. Old builds keep working until 2026-10-01. See "Who is asking". |
-| **Build 13 (1.0.7) to production** | **Built 2026-09-22, NOT yet uploaded** — the production upload needs the owner's explicit go-ahead in chat. See "Build 13" below. |
-| **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 13 is live — should lower the 12+ rating.** |
+| Report content + block user (Google Play UGC policy) | Done in the Worker 2026-09-18. Builds 12 and 13 were never uploaded, so the in-app buttons ship with build 14. |
+| Server stops trusting the phone number in requests (session tokens) | Done 2026-09-22 — Worker live; build 14 carries the tokens. Old builds keep working until 2026-11-01. See "Who is asking". |
+| Build 13 (1.0.7) | Never uploaded. Superseded by build 14 on 2026-09-27, when the owner chose to ship tokens together with Lite/Pro. |
+| Lite / Pro + browsing without an account | Done 2026-09-27 — Worker live, app side in build 14. Payments not connected. See "Lite and Pro". |
+| **Build 14 (1.0.8) to production** | **APK built 2026-09-27, NOT uploaded.** The owner wants to add payments first. The upload needs their explicit go-ahead in chat. See "Build 14" below. |
+| **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 14 is live — should lower the 12+ rating.** |
 
 ### Production access: granted 2026-09-18, after one rejection
 
@@ -691,11 +764,11 @@ Interactive elements on all of them: *Users Interact*, *Shares Location*.
 The age band was driven entirely by one combination: UGC is primary **and**
 the app had **no block, no report, no moderation**.
 
-**That is no longer true as of build 13.** Report and block both ship in it
-(build 12 had them but was never uploaded) — see "Moderation" under the
+**That is no longer true as of build 14.** Report and block both ship in it
+(builds 12 and 13 had them but were never uploaded) — see "Moderation" under the
 Cloudflare section. The rating on file
 is still the old one, because IARC only re-rates when a new questionnaire is
-submitted. Once build 13 is live, go to Play Console -> App content ->
+submitted. Once build 14 is live, go to Play Console -> App content ->
 Content ratings -> **Start new questionnaire** and answer **Yes** to "ability
 to block users or user-generated content" and **Yes** to "ability to report
 users or user-generated content"; chat moderation stays No (there is no chat).
@@ -716,23 +789,30 @@ by itself — nobody needs to press anything. Watch progress at Play Console
 → Publishing overview. `node play.js status` shows the track contents but
 **not** the review state; the console is the only place that shows that.
 
-### Build 13 (1.0.7), the security update — built 2026-09-22, upload pending
+### Build 14 (1.0.8) — built 2026-09-27, upload waiting for payments
 
-Session tokens (see "Who is asking"), plus the Report / Block buttons that
-build 12 had but never shipped. The Worker side was deployed first, the same
-day, and stays compatible with build 11 until 2026-10-01. The AAB is built
-(`android/app/build/outputs/bundle/release/app-release.aab`, versionCode 13);
-a `--dry-run` of the command below passed, but the real production upload
-was held for the owner's explicit go-ahead. Run it once they say yes:
+Everything build 13 had — session tokens (see "Who is asking") and the
+Report / Block buttons — plus Lite/Pro and browsing without an account (see
+"Lite and Pro"). The Worker side is live and stays compatible with build 11
+until 2026-11-01.
+
+On 2026-09-27 the owner said to build this "proper app" before any update,
+and to add payments later. Only the APK is built so far. Before uploading:
+
+1. Add payments (Google Play Billing, see "Lite and Pro"), or get the owner's
+   OK to ship with Pro showing "Coming soon".
+2. Build the AAB (`./gradlew bundleRelease`) and dry-run the upload.
+3. Get the owner's explicit go-ahead in chat, then run:
 
 ```bash
 cd helpme/tools/play
-node play.js upload --track production --status completed --confirm --notes "Security update: your account is now better protected. You may be asked to sign in once more after updating. Also adds Report and Block for listings."
+node play.js upload --track production --status completed --confirm --notes "Look around without an account. Kheli Pro: see prices, search by distance, and keep your requests at the top. Your account is also better protected - you may be asked to sign in once more. Adds Report and Block."
 ```
 
 Everyone who updates is signed out once (their stored sign-in has no token)
-and signs in again with an SMS code. **If build 13 is not live by 2026-09-30,
-push `LEGACY_WRITES_UNTIL` back** or the live build 11 stops working.
+and lands on Browse. The sign-in sheet opens to explain why. **If build 14 is
+not live by 2026-10-31, push `LEGACY_WRITES_UNTIL` back again**, or the live
+build 11 stops working.
 
 ## Common debug recipes
 

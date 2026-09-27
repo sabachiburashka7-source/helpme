@@ -45,7 +45,7 @@ export default function ProfileScreen({
   function handleCancelSubscription() {
     Alert.alert(
       t('Cancel subscription?'),
-      t('You will lose access to the 15-post-per-month Pro plan immediately and drop back to 1 post per month.'),
+      t('You will go back to Lite right away: 3 requests a month, no prices and no distance search.'),
       [
         { text: t('Keep Pro'), style: 'cancel' },
         {
@@ -188,40 +188,54 @@ export default function ProfileScreen({
               {user.phone ? <Text style={styles.identityPhone}>{user.phone}</Text> : null}
             </GlassPanel>
 
-            {/* Subscription card — only rendered for Pro users. The Pro upgrade
-                flow is hidden in v1 since Google Play Billing isn't wired yet;
-                Pro accounts only exist via manual toggling in this phase, and
-                they still need a way to cancel. */}
+            {/* Subscription: which plan this account is on. Payments are not
+                connected yet, so Pro only exists when switched on by hand -
+                and it still needs a way to cancel. */}
+            <View style={styles.sectionLabelWrap}>
+              <SectionLabel>{t('Subscription')}</SectionLabel>
+            </View>
             {tier === 'pro' ? (
-              <>
-                <View style={styles.sectionLabelWrap}>
-                  <SectionLabel>{t('Subscription')}</SectionLabel>
-                </View>
-                <GlassSurface tone="light" radius={26} shadow="base" style={styles.card}>
-                  <View style={styles.subRow}>
-                    <View style={styles.tierBadgePro}>
-                      <Text style={styles.tierBadgeTextPro}>{t('Pro')}</Text>
-                    </View>
-                    <Text style={styles.subPlanName}>{t('15 posts per month')}</Text>
+              <GlassSurface tone="light" radius={26} shadow="base" style={styles.card}>
+                <View style={styles.subRow}>
+                  <View style={styles.tierBadgePro}>
+                    <Text style={styles.tierBadgeTextPro}>{t('Pro')}</Text>
                   </View>
+                  <Text style={styles.subPlanName}>{t('All Pro features are on')}</Text>
+                </View>
 
-                  {expiry ? (
-                    <Text style={styles.subMeta}>
-                      {t('Renews on {date}').replace('{date}', expiry)}
-                    </Text>
-                  ) : null}
+                {expiry ? (
+                  <Text style={styles.subMeta}>
+                    {t('Renews on {date}').replace('{date}', expiry)}
+                  </Text>
+                ) : null}
 
-                  <GlassButton
-                    title={t('Cancel subscription')}
-                    variant="glass"
-                    size="sm"
-                    onPress={handleCancelSubscription}
-                    style={styles.subAction}
-                    textStyle={{ color: colors.textSecondary }}
-                  />
-                </GlassSurface>
-              </>
-            ) : null}
+                <GlassButton
+                  title={t('Cancel subscription')}
+                  variant="glass"
+                  size="sm"
+                  onPress={handleCancelSubscription}
+                  style={styles.subAction}
+                  textStyle={{ color: colors.textSecondary }}
+                />
+              </GlassSurface>
+            ) : (
+              <GlassSurface tone="light" radius={26} shadow="base" style={styles.card}>
+                <View style={styles.subRow}>
+                  <View style={styles.tierBadgeLite}>
+                    <Text style={styles.tierBadgeTextLite}>{t('Lite')}</Text>
+                  </View>
+                  <Text style={styles.subPlanName}>
+                    {t('Free: browse, call, and post 3 requests a month.')}
+                  </Text>
+                </View>
+                <GlassButton
+                  title={t('Upgrade to Pro — $1/month')}
+                  size="md"
+                  onPress={onUpgrade}
+                  style={styles.subAction}
+                />
+              </GlassSurface>
+            )}
 
             {/* Account actions */}
             <View style={styles.sectionLabelWrap}>
@@ -407,6 +421,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.6,
     color: '#fff',
+  },
+  tierBadgeLite: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: glass.accentFill,
+    borderWidth: 1,
+    borderColor: glass.accentStroke,
+  },
+  tierBadgeTextLite: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: ACCENT,
   },
   subPlanName: {
     fontSize: 14,

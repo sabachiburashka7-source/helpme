@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Alert, Linking, Modal } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import BrowseScreen from './screens/BrowseScreen';
 import MyRequestsScreen from './screens/MyRequestsScreen';
 import AuthScreen from './screens/AuthScreen';
+import ProScreen from './screens/ProScreen';
 import { colors, glass, radius } from './components/theme';
 import { BlurSurface } from './components/Glass';
 import { I18nProvider, useTranslation } from './components/i18n';
@@ -18,6 +19,7 @@ const STORAGE_KEY = 'helpme.user';
 const STORE_PACKAGE = 'com.sabachiburashka.helpme';
 // Shown on the sign-in screen when the app signs someone out by itself.
 const SIGN_IN_AGAIN = 'For your security, please sign in again with your phone number.';
+const SIGN_IN_FOR_PRO = 'Sign in first, then you can get Pro.';
 let tempCounter = 0;
 
 function openStoreListing() {
@@ -63,8 +65,21 @@ function AppInner() {
   const [blocked, setBlocked] = useState([]);
   // Translation key for the sign-in screen when the app signed someone out.
   const [signInNotice, setSignInNotice] = useState(null);
+  // Looking around needs no account, so sign-in is a sheet that opens only
+  // when someone tries to post, call, report or block. `authReason` is the
+  // translation key that says which.
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authReason, setAuthReason] = useState(null);
+  const [proOpen, setProOpen] = useState(false);
   const updatePromptShown = useRef(false);
   const { t } = useTranslation();
+
+  const requireSignIn = useCallback((reason = null) => {
+    setAuthReason(reason);
+    setAuthOpen(true);
+  }, []);
+
+  const openPro = useCallback(() => setProOpen(true), []);
 
   // What happens when the server stops accepting this sign-in, or says this
   // build is too old. Registered before anything below fetches.
@@ -95,9 +110,11 @@ function AppInner() {
       if (cancelled) return;
       if (u && !u.token) {
         // Signed in on a build from before session tokens. The server no
-        // longer takes a bare phone number on trust, so start again.
+        // longer takes a bare phone number on trust, so start again - and
+        // say why straight away, before they find their posts locked.
         persistUser(null);
         setSignInNotice(SIGN_IN_AGAIN);
+        setAuthOpen(true);
         setUserHydrated(true);
         return;
       }
@@ -119,15 +136,15 @@ function AppInner() {
     };
   }, []);
 
-  // The server knows who is looking from the session, so it can leave out
-  // offers by people this user has blocked. Offers reported by enough
-  // people are filtered out server-side for everyone.
+  // Everyone gets the feed, signed in or not. The server decides what each
+  // viewer sees: no phone numbers before signing in, prices only with Pro
+  // (and on your own requests), nothing from people you blocked or requests
+  // you reported. Offers reported by enough people are hidden for everyone.
   const fetchOffers = useCallback(async () => {
-    if (!user?.phone) return;
     const { data } = await apiFetch('/api/offers');
     if (!Array.isArray(data)) return;
     setDbOffers(data);
-    setMyOffers(data.filter((o) => o.phone === user.phone));
+    setMyOffers(user?.phone ? data.filter((o) => o.phone === user.phone) : []);
   }, [user?.phone]);
 
   const fetchBlocked = useCallback(async () => {
@@ -138,28 +155,44 @@ function AppInner() {
     } catch {}
   }, [user?.phone]);
 
+  // Signing in or out, and Pro starting or ending, all change what the feed
+  // shows, so each one reloads it.
   useEffect(() => {
-    if (!user) return;
+    if (!userHydrated) return;
     setOffersLoading(true);
     fetchOffers()
       .catch(() => {})
       .finally(() => setOffersLoading(false));
-    fetchBlocked();
-  }, [user, fetchOffers, fetchBlocked]);
+    if (user?.token) fetchBlocked();
+    else setBlocked([]);
+  }, [userHydrated, user?.token, user?.tier, fetchOffers, fetchBlocked]);
 
   // `u` is the verify_code response: the account plus its session `token`.
   function handleAuthenticated(u) {
     setSessionToken(u?.token);
     setSignInNotice(null);
+    setAuthOpen(false);
+    setAuthReason(null);
     persistUser(u);
     setUser(u);
   }
 
-  // Forget the sign-in on this phone. `notice` explains it on the sign-in
-  // screen when the app did it rather than the person.
+  function closeAuth() {
+    setAuthOpen(false);
+    setAuthReason(null);
+    setSignInNotice(null);
+  }
+
+  // Forget the sign-in on this phone; the person keeps browsing without it.
+  // `notice` is set when the app did this rather than the person, and opens
+  // the sign-in sheet to explain why.
   function endSession(notice = null) {
     setSessionToken(null);
     setSignInNotice(notice);
+    if (notice) {
+      setAuthReason(null);
+      setAuthOpen(true);
+    }
     persistUser(null);
     setUser(null);
     setMyOffers([]);
@@ -326,13 +359,18 @@ function AppInner() {
     }
   }
 
-  function handleUpgrade() {
-    // Placeholder until Google Play Billing is wired up. See
-    // supabase/migrations/001_add_subscription.sql for the schema and the
-    // Phase 2 plan in the project notes.
+  // "Get Pro" on the Pro screen. Payments are not connected yet, so for now
+  // it says so. When they are, the purchase starts here; the server already
+  // turns Pro on and off from users.tier + subscription_expires_at.
+  function handleSubscribe() {
+    if (!user) {
+      setProOpen(false);
+      requireSignIn(SIGN_IN_FOR_PRO);
+      return;
+    }
     Alert.alert(
-      'Pro — coming soon',
-      'In-app purchase for $1/month (15 posts) is being connected through Google Play. You can already test the Pro tier by setting tier=pro in Supabase for your account.'
+      t('Coming soon'),
+      t('Payments for Pro are not open yet. We will let you know as soon as they are.')
     );
   }
 
@@ -355,8 +393,6 @@ function AppInner() {
       apiFetch('/api/offers', { method: 'PATCH', body: { id, ...persistPatch } }).catch(() => {});
     }
   }
-
-  const AuthContent = <AuthScreen onAuthenticated={handleAuthenticated} notice={signInNotice} />;
 
   const AppContent = (
     <NavigationContainer>
@@ -417,6 +453,8 @@ function AppInner() {
               user={user}
               onReportOffer={reportOffer}
               onBlockUser={blockUser}
+              onRequireSignIn={requireSignIn}
+              onOpenPro={openPro}
             />
           )}
         </Tab.Screen>
@@ -432,10 +470,11 @@ function AppInner() {
               onLogout={handleLogout}
               onDeleteAccount={deleteAccount}
               onCancelSubscription={cancelSubscription}
-              onUpgrade={handleUpgrade}
+              onUpgrade={openPro}
               onUpdateProfileImage={updateProfileImage}
               blocked={blocked}
               onUnblockUser={unblockUser}
+              onRequireSignIn={requireSignIn}
             />
           )}
         </Tab.Screen>
@@ -444,11 +483,34 @@ function AppInner() {
   );
 
   // While we read the persisted user from storage, render nothing on a
-  // background color so we don't briefly flash the auth screen.
+  // background color so the feed does not briefly load as signed out.
   if (!userHydrated) {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   }
-  return user ? AppContent : AuthContent;
+  return (
+    <>
+      {AppContent}
+      <Modal
+        visible={authOpen}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={closeAuth}
+      >
+        <AuthScreen
+          onAuthenticated={handleAuthenticated}
+          notice={signInNotice}
+          reason={authReason}
+          onClose={closeAuth}
+        />
+      </Modal>
+      <ProScreen
+        visible={proOpen}
+        user={user}
+        onClose={() => setProOpen(false)}
+        onSubscribe={handleSubscribe}
+      />
+    </>
+  );
 }
 
 function AnimatedTabIcon({ route, color, focused }) {

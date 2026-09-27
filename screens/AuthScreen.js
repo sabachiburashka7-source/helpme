@@ -18,9 +18,13 @@ import {
 const RESEND_COOLDOWN_SECONDS = 30;
 const ACCENT = '#7A1230';
 
+// Opens as a sheet over the app when someone wants to do something that
+// needs an account; looking around does not.
 // `notice`: optional translation key shown under the form when the app sent
 // the person back here itself (e.g. the server stopped accepting their sign-in).
-export default function AuthScreen({ onAuthenticated, notice }) {
+// `reason`: optional translation key saying what they were trying to do.
+// `onClose`: shows a "Not now" button that goes back to browsing.
+export default function AuthScreen({ onAuthenticated, notice, reason, onClose }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState('login');
   const [step, setStep] = useState('details'); // 'details' | 'code'
@@ -99,6 +103,19 @@ export default function AuthScreen({ onAuthenticated, notice }) {
         },
       });
       const { data } = r;
+      // On the wrong tab for this number: switch tabs and keep the number,
+      // so someone new is not left stuck on "No account found". The server
+      // answers both before sending any SMS.
+      if (r.status === 404 && !isRegister) {
+        switchMode('register');
+        flashError(t('No account for this number yet. Add your name to create one.'));
+        return;
+      }
+      if (r.status === 409 && isRegister) {
+        switchMode('login');
+        flashError(t('You already have an account. Tap "Send code" to sign in.'));
+        return;
+      }
       if (!r.ok) {
         flashError(data?.error || t('Something went wrong'));
         setBusy(false);
@@ -160,7 +177,14 @@ export default function AuthScreen({ onAuthenticated, notice }) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.langRow}>
+            <View style={[styles.langRow, onClose && styles.langRowWithClose]}>
+              {onClose ? (
+                <Pressable onPress={onClose} hitSlop={8}>
+                  <GlassSurface tone="strong" radius={radius.pill} shadow="subtle" style={styles.closeBtn}>
+                    <Text style={styles.closeText}>{t('Not now')}</Text>
+                  </GlassSurface>
+                </Pressable>
+              ) : null}
               <LanguageSwitcher size="md" />
             </View>
 
@@ -179,6 +203,9 @@ export default function AuthScreen({ onAuthenticated, notice }) {
                   />
                 </GlassSurface>
                 <Text style={styles.brand}>kheli</Text>
+                {reason && step === 'details' ? (
+                  <Text style={styles.reason}>{t(reason)}</Text>
+                ) : null}
                 <Text style={styles.tagline}>
                   {step === 'code'
                     ? t('We sent a code to {phone}').replace('{phone}', phoneE164)
@@ -385,6 +412,30 @@ const styles = StyleSheet.create({
   langRow: {
     alignItems: 'flex-end',
     marginBottom: 10,
+  },
+  langRowWithClose: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  closeBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  closeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: ACCENT,
+    letterSpacing: 0.2,
+  },
+  reason: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 10,
+    lineHeight: 21,
+    textAlign: 'center',
+    paddingHorizontal: 12,
   },
 
   header: {
