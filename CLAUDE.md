@@ -468,6 +468,27 @@ app demanded it before showing anything. The owner wants Pro at **$1/month**.
 - The privacy policy (`src/privacy.html`) was updated the same day to say
   numbers are for signed-in users only and prices for Pro only.
 
+**Google Play Billing is not available to this developer account.** This
+was checked on 2026-09-28:
+
+- Google's "Supported locations for developer and merchant registration"
+  page (support.google.com/googleplay/android-developer/answer/9306917)
+  lists **Georgia: developer registration ✔, merchant registration ✘**.
+  Armenia and Türkiye are ✔ on both.
+- The developer account's legal address is in Georgia.
+- Play Console > Monetize with Play > Subscriptions says "You need to set up
+  a Google Payments merchant account", and one cannot be created from
+  Georgia.
+
+So no Play subscription can exist, and the plan below (Play Billing) is
+blocked until the app lives in a developer account whose payments profile
+is in a merchant-supported country. That means a company abroad plus an
+app transfer. The remaining legal route is selling Pro **outside** the app
+(Georgian bank payment page or transfer) and only honouring it inside.
+Play's Payments policy forbids any in-app button, link, price or message
+that leads to that outside payment, so the in-app Pro screen may describe
+Pro but must not say where or how to buy it. The owner has not chosen yet.
+
 **Payments are NOT connected.** "Get Pro" says "Coming soon". Give someone
 Pro by hand with:
 
@@ -703,7 +724,8 @@ the developer account, identity checks or payments.
 | Build 13 (1.0.7) | Never uploaded. Superseded by build 14 on 2026-09-27, when the owner chose to ship tokens together with Lite/Pro. |
 | Lite / Pro + browsing without an account | Done 2026-09-27 — Worker live, app side in build 14. Payments not connected. See "Lite and Pro". |
 | **Build 14 (1.0.8) to production** | **Uploaded 2026-09-28 at full rollout, in Google's review.** The owner said to publish with Pro showing "Coming soon" and add payments later. Smoke-tested on the `Pixel_7` emulator first, because the phone was not plugged in. See "Build 14" below. |
-| **Play Console "Sign in details" text** | **TODO (needs the owner's yes):** it assumes the app opens on the sign-in screen. Add at the start: *"The app opens on Browse, which needs no account. Tap My requests at the bottom, then Sign in or register."* Keep the rest, which holds the demo code. |
+| **Play Console "Sign in details" text** | **Owner said yes on 2026-09-28; waiting for their Save.** It assumed the app opens on the sign-in screen. Claude typed this at the start: *"The app opens on Browse, which needs no account. To sign in, tap My requests at the bottom, then Sign in or register."* (477/500 characters; the rest, with the demo code, is untouched). The auto-mode classifier blocked Claude from clicking Add / Save in Play Console, so the owner has to press them. |
+| **Payments for Pro** | **BLOCKED — Georgia has no Google Play merchant registration** (checked 2026-09-28). See "Lite and Pro". |
 | **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 14 is live — should lower the 12+ rating.** |
 
 ### Production access: granted 2026-09-18, after one rejection
