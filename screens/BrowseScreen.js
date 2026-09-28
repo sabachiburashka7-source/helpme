@@ -6,7 +6,7 @@ import {
 import { REPORT_REASONS } from '../components/moderation';
 import { colors, glass, radius, typography } from '../components/theme';
 import FadeInUp from '../components/FadeInUp';
-import { useTranslation } from '../components/i18n';
+import { useTranslation, LanguageSwitcher } from '../components/i18n';
 import { isImageUrl } from '../components/profileImage';
 import { reverseGeocode, getCachedLocationName, isPinnedCoordinateString } from '../components/reverseGeocode';
 import { getCurrentLocation } from '../components/location';
@@ -231,11 +231,16 @@ export default function BrowseScreen({
             <View style={styles.headerBar}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.headerTitle}>{t('Browse')}</Text>
-                <Text style={styles.headerSub}>
+                <Text style={styles.headerSub} numberOfLines={1}>
                   {filtered.length} {filtered.length === 1 ? t('request') : t('requests')}
                   {radiusKm != null && userCoords ? ` · ${t('within')} ${radiusKm} km` : ` · ${t('nearby')}`}
                 </Text>
               </View>
+              {/* Browse is the first screen now, and the app starts in
+                  Georgian: without this, someone who does not read it
+                  would have to find the switch on another tab. Signed-in
+                  people have it at the top of My requests. */}
+              {!user ? <LanguageSwitcher style={styles.headerLang} /> : null}
               <FilterButton
                 open={filterOpen}
                 onPress={() => {
@@ -1106,6 +1111,7 @@ const styles = StyleSheet.create({
     height: HEADER_HEIGHT,
   },
   headerTitle: { ...typography.h1, fontSize: 26, letterSpacing: -0.5 },
+  headerLang: { marginLeft: 12 },
   headerSub: { ...typography.caption, color: colors.textTertiary, marginTop: 3 },
 
   list: { paddingHorizontal: 16 },
