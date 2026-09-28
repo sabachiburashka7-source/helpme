@@ -298,6 +298,11 @@ async function main() {
   check('signed-in feed includes my own offer', r.status === 200 && r.data.some((o) => o.id === reviewerOffer), r);
 
   console.log('\n# Lite and Pro');
+  const LITE = '+995599000555';
+  const lite = 'lite-token-' + crypto.randomBytes(16).toString('hex');
+  await addAccount(db, LITE, 'Lite Lela', { token: lite, used: true });
+  r = await call('POST', '/api/offers', { token: lite, body: { description: 'Carry a sofa upstairs', price: 25 } });
+  const liteOffer = r.data.id;
   const PRO = '+995599000444';
   const pro = 'pro-token-' + crypto.randomBytes(16).toString('hex');
   await addAccount(db, PRO, 'Pro Paata', { token: pro, used: true });
@@ -317,23 +322,31 @@ async function main() {
   const order = (list) => list.map((o) => o.id).join(',');
 
   r = await call('GET', '/api/offers', { build: 14 });
-  check('a new build that is not signed in can look around', r.status === 200 && r.data.length === 3, r);
+  check('a new build that is not signed in can look around', r.status === 200 && r.data.length === 4, r);
   check('...but sees no phone numbers and no prices', r.data.every((o) => o.phone === null && o.price === null && o.price_locked === true), r.data);
-  check('...a Pro post from this week comes first; an older one keeps date order', order(r.data) === [proOffer, reviewerOffer, oldProOffer].join(','), r.data);
-  check('...and Pro posts are marked', r.data.find((o) => o.id === proOffer).pro === true && r.data.find((o) => o.id === reviewerOffer).pro === false, r.data);
+  check('...a Pro post from this week comes first; an older one keeps date order', order(r.data) === [proOffer, liteOffer, reviewerOffer, oldProOffer].join(','), r.data);
+  check('...and Pro posts are marked', r.data.find((o) => o.id === proOffer).pro === true && r.data.find((o) => o.id === liteOffer).pro === false, r.data);
 
-  r = await call('GET', '/api/offers', { token: reviewer });
+  r = await call('GET', '/api/offers', { token: lite });
   const byId = (list, id) => list.find((o) => o.id === id);
-  check('Lite: my own price shows', byId(r.data, reviewerOffer).price === 20 && !byId(r.data, reviewerOffer).price_locked, r.data);
+  check('Lite: my own price shows', byId(r.data, liteOffer).price === 25 && !byId(r.data, liteOffer).price_locked, r.data);
   check('Lite: other people\'s prices are locked, their numbers are not', byId(r.data, proOffer).price === null && byId(r.data, proOffer).price_locked === true && byId(r.data, proOffer).phone === PRO, r.data);
 
   r = await call('GET', '/api/offers', { token: pro });
-  check('Pro: every price shows', byId(r.data, reviewerOffer).price === 20 && byId(r.data, proOffer).price === 60 && r.data.every((o) => !o.price_locked), r.data);
+  check('Pro: every price shows', byId(r.data, liteOffer).price === 25 && byId(r.data, proOffer).price === 60 && r.data.every((o) => !o.price_locked), r.data);
+
+  // Google's reviewers cannot buy Pro, so their shared account sees the app
+  // as Pro - without its own posts being moved up or badged.
+  r = await auth(call, { action: 'me' }, { token: reviewer });
+  check('the reviewer account is shown as Pro', r.status === 200 && r.data.tier === 'pro', r.data);
+  r = await call('GET', '/api/offers', { token: reviewer });
+  check('...and sees every price', r.data.every((o) => !o.price_locked) && byId(r.data, liteOffer).price === 25, r.data);
+  check('...but its own post is not moved up or badged', byId(r.data, reviewerOffer).pro === false && order(r.data) === [proOffer, liteOffer, reviewerOffer, oldProOffer].join(','), r.data);
 
   await setPlan('pro', ago(86400000));
   r = await call('GET', '/api/offers', { token: pro });
-  check('expired Pro: prices lock again', byId(r.data, reviewerOffer).price === null && byId(r.data, reviewerOffer).price_locked === true, r.data);
-  check('...and the posts lose the boost and the badge', order(r.data) === [reviewerOffer, proOffer, oldProOffer].join(',') && r.data.every((o) => o.pro === false), r.data);
+  check('expired Pro: prices lock again', byId(r.data, liteOffer).price === null && byId(r.data, liteOffer).price_locked === true, r.data);
+  check('...and the posts lose the boost and the badge', order(r.data) === [liteOffer, reviewerOffer, proOffer, oldProOffer].join(',') && r.data.every((o) => o.pro === false), r.data);
   await setPlan('free', null);
 
   console.log('\n# Sign out and sessions');

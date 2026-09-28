@@ -160,12 +160,20 @@ function isReviewerPhone(env, phone) {
   return normalizePhone(phone) === testPhone;
 }
 
+// The plan an account sees the app with. The shared reviewer account gets
+// Pro: Google's reviewers must be able to reach every part of the app and
+// cannot buy a subscription to do it. Its own posts are not moved up or
+// badged, though - posterIsPro() looks only at what was paid for.
+function planOf(env, row) {
+  return row && isReviewerPhone(env, row.phone) ? 'pro' : effectiveTier(row);
+}
+
 // Shape every user response identically so the client always sees the same
 // fields (id, phone, name, profile_image, tier, subscription_expires_at,
 // post_limit).
 function shapeUser(row, env) {
   if (!row) return null;
-  const tier = effectiveTier(row);
+  const tier = planOf(env, row);
   return {
     id: row.id,
     phone: row.phone,
@@ -807,10 +815,10 @@ async function handleOffers(request, env) {
     let viewerPro = false;
     if (viewer) {
       const me = await db
-        .prepare('SELECT tier, subscription_expires_at FROM users WHERE phone = ?')
+        .prepare('SELECT phone, tier, subscription_expires_at FROM users WHERE phone = ?')
         .bind(viewer)
         .first();
-      viewerPro = effectiveTier(me) === 'pro';
+      viewerPro = planOf(env, me || { phone: viewer }) === 'pro';
     }
 
     // Four things happen in one statement so the feed stays a single round

@@ -377,7 +377,7 @@ last way in without a token.
 
 **Security test — run before every Worker deploy that touches auth, offers,
 reports or blocks:** `cd helpme/cloudflare && node test/security.test.cjs`.
-90 checks (including who sees prices and numbers, and the Pro boost) against
+93 checks (including who sees prices and numbers, and the Pro boost) against
 wrangler's in-memory local D1/KV with a stand-in OpenAI; nothing touches
 production.
 
@@ -460,8 +460,11 @@ app demanded it before showing anything. The owner wants Pro at **$1/month**.
   never leaves the phone, which the privacy policy now says.
 - `MIN_BUILD` is 14, because build 13 cannot draw a locked price.
 - Pro is `users.tier = 'pro'` with `subscription_expires_at` in the future
-  (`effectiveTier`). The shared reviewer account (`TEST_PHONE`) is Lite like
-  everyone else.
+  (`effectiveTier`). The shared reviewer account (`TEST_PHONE`) **sees the
+  app as Pro** (`planOf`, since 2026-09-28). Play Console's "Sign in details"
+  page says reviewers must reach every part of the app, access tiers
+  included, and cannot buy a subscription to do it. Its own posts are not
+  moved up or badged, because `posterIsPro` only counts paid plans.
 - The privacy policy (`src/privacy.html`) was updated the same day to say
   numbers are for signed-in users only and prices for Pro only.
 
@@ -487,8 +490,10 @@ must first create a payments profile in Play Console (console-only). Then:
    notifications for renewals and cancellations.
 4. Point `cancel_subscription` at Play's "Manage subscription" screen.
 
-**Do not publish build 14 before payments work** without telling the owner
-first: Lite users would see locked prices with no way to unlock them.
+Until payments work, Lite users see locked prices with no way to unlock
+them. The owner accepted that on 2026-09-28 ("no customers yet") and build
+14 went out with Pro showing "Coming soon". When payments land, also
+re-answer the content rating questionnaire's "digital purchases" question.
 
 ### Secrets (Cloudflare dashboard -> Workers -> helpme-api -> Settings -> Variables)
 
@@ -697,7 +702,8 @@ the developer account, identity checks or payments.
 | Server stops trusting the phone number in requests (session tokens) | Done 2026-09-22 — Worker live; build 14 carries the tokens. Old builds keep working until 2026-11-01. See "Who is asking". |
 | Build 13 (1.0.7) | Never uploaded. Superseded by build 14 on 2026-09-27, when the owner chose to ship tokens together with Lite/Pro. |
 | Lite / Pro + browsing without an account | Done 2026-09-27 — Worker live, app side in build 14. Payments not connected. See "Lite and Pro". |
-| **Build 14 (1.0.8) to production** | **APK built 2026-09-27, NOT uploaded.** The owner wants to add payments first. The upload needs their explicit go-ahead in chat. See "Build 14" below. |
+| **Build 14 (1.0.8) to production** | **Uploaded 2026-09-28 at full rollout, in Google's review.** The owner said to publish with Pro showing "Coming soon" and add payments later. Smoke-tested on the `Pixel_7` emulator first, because the phone was not plugged in. See "Build 14" below. |
+| **Play Console "Sign in details" text** | **TODO (needs the owner's yes):** it assumes the app opens on the sign-in screen. Add at the start: *"The app opens on Browse, which needs no account. Tap My requests at the bottom, then Sign in or register."* Keep the rest, which holds the demo code. |
 | **Re-submit the content rating questionnaire answering Yes to block/report** | **TODO once build 14 is live — should lower the 12+ rating.** |
 
 ### Production access: granted 2026-09-18, after one rejection
@@ -789,25 +795,40 @@ by itself — nobody needs to press anything. Watch progress at Play Console
 → Publishing overview. `node play.js status` shows the track contents but
 **not** the review state; the console is the only place that shows that.
 
-### Build 14 (1.0.8) — built 2026-09-27, upload waiting for payments
+### Build 14 (1.0.8) — uploaded to production 2026-09-28, in review
 
 Everything build 13 had — session tokens (see "Who is asking") and the
 Report / Block buttons — plus Lite/Pro and browsing without an account (see
 "Lite and Pro"). The Worker side is live and stays compatible with build 11
 until 2026-11-01.
 
-On 2026-09-27 the owner said to build this "proper app" before any update,
-and to add payments later. Only the APK is built so far. Before uploading:
-
-1. Add payments (Google Play Billing, see "Lite and Pro"), or get the owner's
-   OK to ship with Pro showing "Coming soon".
-2. Build the AAB (`./gradlew bundleRelease`) and dry-run the upload.
-3. Get the owner's explicit go-ahead in chat, then run:
+On 2026-09-27 the owner said to build this "proper app" before any update.
+On 2026-09-28 they said to publish it with Pro showing "Coming soon" and to
+add payments later ("no customers yet"). Uploaded with:
 
 ```bash
 cd helpme/tools/play
-node play.js upload --track production --status completed --confirm --notes "Look around without an account. Kheli Pro: see prices, search by distance, and keep your requests at the top. Your account is also better protected - you may be asked to sign in once more. Adds Report and Block."
+node play.js upload --track production --status completed --confirm --notes "You can now look around Kheli without an account. Sign in only when you want to post or call. Your account is also better protected, so you may be asked to sign in once more. Adds Report and Block for requests. Kheli Pro is coming soon."
 ```
+
+Before the upload:
+
+- The reviewer bypass was re-proven: `send_code` gave `sent`, and a wrong
+  code gave `Incorrect or expired code`.
+- The build was smoke-tested on the `Pixel_7` emulator with uiautomator text
+  dumps, no screenshots. Signed out, these all worked with no JS errors:
+  - the EN switch;
+  - a post with a locked price, "Sign in to call", Report and Block;
+  - the Pro screen and its "Get Pro" button, which opens the sign-in sheet;
+  - "Not now" and the My requests card.
+- The Browse header gained an EN/RU/GE switch for signed-out people. The
+  first screen used to be the sign-in screen, which had one, and reviewers
+  are told to "tap EN at the top right".
+
+Boot the emulator with
+`emulator -avd Pixel_7 -no-window -no-audio -no-snapshot-save -gpu swiftshader_indirect`.
+In Git Bash, set `MSYS_NO_PATHCONV=1` before any `adb shell ... /sdcard/...`
+command, or the path is rewritten.
 
 Everyone who updates is signed out once (their stored sign-in has no token)
 and lands on Browse. The sign-in sheet opens to explain why. **If build 14 is
